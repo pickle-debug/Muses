@@ -1,0 +1,4 @@
+interface:
+  display_name: "Moras Competitive Analysis"
+  short_description: "拆解 AI 电商营销产品与竞品"
+  default_prompt: "使用 $moras-competitive-analysis 分析一个 AI 电商营销产品的功能闭环、竞品差异和 MVP 机会。"

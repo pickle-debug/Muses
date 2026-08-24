@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "muses-demo-provider",
+    "baseUrl": "https://musesapi.ordoeden.com/v1",
+    "allowedHosts": ["musesapi.ordoeden.com"],
+    "auth": { "type": "bearer" },
+    "connectionTestPath": "/models"
+  },
+  "models": {
+    "text": "TEXT_MODEL_REPLACE_ME",
+    "image": "gpt-image-2",
+    "video": "VIDEO_MODEL_REPLACE_ME"
+  },
+  "text": {
+    "path": "/chat/completions",
+    "responseTextPath": "choices[0].message.content",
+    "timeoutMs": 60000
+  },
+  "image": {
+    "path": "/images/edits",
+    "requestEncoding": "multipart",
+    "responseMode": "url_or_b64_json",
+    "responseUrlPath": "data[0].url",
+    "responseBase64Path": "data[0].b64_json",
+    "requestIdPath": "id",
+    "revisedPromptPath": "data[0].revised_prompt",
+    "count": 1,
+    "aspectRatio": "3:4",
+    "timeoutMs": 240000,
+    "maximumDownloadBytes": 31457280
+  },
+  "video": {
+    "createPath": "/videos/generations",
+    "statusPathTemplate": "/videos/generations/{taskId}",
+    "taskIdPath": "id",
+    "statusPath": "status",
+    "progressPath": "progress",
+    "resultUrlPath": "data[0].url",
+    "errorPath": "error.message",
+    "statusMap": {
+      "queued": ["queued", "submitted"],
+      "processing": ["processing", "running"],
+      "succeeded": ["succeeded", "completed"],
+      "failed": ["failed", "error"],
+      "cancelled": ["cancelled", "canceled"]
+    },
+    "durationSeconds": 5,
+    "resolution": "720p",
+    "audio": false,
+    "pollIntervalMs": 5000,
+    "maxPollDurationMs": 900000,
+    "timeoutMs": 60000,
+    "maximumDownloadBytes": 209715200
+  }
+}

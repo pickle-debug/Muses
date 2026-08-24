@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ecommerce Product Manager"
+  short_description: "把电商需求落成 PRD 与 MVP"
+  default_prompt: "使用 $ecommerce-product-manager 把一个 AI 电商营销想法拆成 MVP、用户旅程、数据模型和验收标准。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mobile Commerce Marketing"
+  short_description: "设计移动端电商营销增长闭环"
+  default_prompt: "使用 $mobile-commerce-marketing 为一个短视频电商 App 设计发现、创作、发布和归因指标闭环。"
