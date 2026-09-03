@@ -4,7 +4,7 @@
 
 日期：2026-08-23
 
-适用范围：2–3 日 Demo 与四周 MVP 的技术边界
+适用范围：2–3 日首版与四周 MVP 的技术边界
 
 说明：本文是实现前契约，不表示工程已创建、编译或真机验证
 
@@ -12,7 +12,7 @@
 
 ### 1.1 客户端框架
 
-2–3 日 Demo 采用：
+2–3 日首版采用：
 
 - 原生 SwiftUI，最低支持 iOS 17。
 - Swift 6；并发逻辑使用 `async/await`、`Task` 与 `actor` 管理。
@@ -20,9 +20,9 @@
 - AVFoundation 处理媒体校验、配对视频元数据与本地预览。
 - URLSession 负责固定供应商 Endpoint 的上传、轮询与下载。
 - `Codable` 读取随 App 打包的 JSON 配置和持久化本地任务快照。
-- `UserDefaults` 仅保存已明确接受风险的 Demo 临时 Key；业务对象与媒体文件不得写入 `UserDefaults`。
+- `UserDefaults` 仅保存已明确接受风险的首版临时 Key；业务对象与媒体文件不得写入 `UserDefaults`。
 
-Demo 不使用 React Native、TypeScript、Expo、Expo Go、Development Build 或跨端桥接层。Apple Live Photo 能力直接作为 Swift 服务实现，不再封装成供 JS 调用的原生模块。
+首版不使用 React Native、TypeScript、Expo、Expo Go、Development Build 或跨端桥接层。Apple Live Photo 能力直接作为 Swift 服务实现，不再封装成供 JS 调用的原生模块。
 
 性能判断：
 
@@ -31,11 +31,11 @@ Demo 不使用 React Native、TypeScript、Expo、Expo Go、Development Build �
 - 视图状态只持有文件 URL 与元数据，不在内存长期持有完整 Base64 或视频字节。
 - 媒体封装、相册写入和格式识别由原生框架完成。
 
-Android 客户端不属于 Demo。只有 iOS Demo 获得真实发布和复用反馈后，才对 Android Motion Photo 做独立 Spike，并在原生 Android 与 RN 之间另立技术决策记录。
+Android 客户端不属于首版。只有 iOS 首版获得真实发布和复用反馈后，才对 Android Motion Photo 做独立 Spike，并在原生 Android 与 RN 之间另立技术决策记录。
 
-### 1.2 Demo 与正式版分层
+### 1.2 首版与正式版分层
 
-| 能力 | Demo | 正式版 |
+| 能力 | 首版 | 正式版 |
 |---|---|---|
 | 客户端 | SwiftUI，iOS 17+ | 基于市场反馈决定继续原生双端或迁移 RN；业务 API 保持平台无关 |
 | 用户 | 无登录，本机单用户 | 服务端用户与工作空间 |
@@ -47,11 +47,11 @@ Android 客户端不属于 Demo。只有 iOS Demo 获得真实发布和复用反
 | 数据 | 本地 | 服务端主数据 + 本地缓存 |
 | 发布 | 保存/复制/打开小红书 | 仍以官方权限和人工确认为准 |
 
-Demo 的直接客户端调用、普通本地 Key 存储和无后端方案不得被视为正式架构。
+首版的直接客户端调用、普通本地 Key 存储和无后端方案不得被视为正式架构。
 
 ## 2. 总体架构
 
-### 2.1 Demo
+### 2.1 首版
 
 ```mermaid
 flowchart TB
@@ -117,7 +117,7 @@ MusesSwiftUI/
 └─ Tests/
 ```
 
-Demo 工程不包含 JS、Expo Module 或 Android 目录。领域对象、Provider 协议和配置字段保持平台无关，未来客户端可依据相同 API 契约重新实现。
+首版工程不包含 JS、Expo Module 或 Android 目录。领域对象、Provider 协议和配置字段保持平台无关，未来客户端可依据相同 API 契约重新实现。
 
 ## 4. 配置契约
 
@@ -136,7 +136,7 @@ Demo 工程不包含 JS、Expo Module 或 Android 目录。领域对象、Provid
 {
   "schemaVersion": 1,
   "provider": {
-    "id": "muses-demo-provider",
+    "id": "muses-provider",
     "baseUrl": "https://media.example.invalid/v1",
     "allowedHosts": ["media.example.invalid"],
     "auth": {
@@ -203,11 +203,11 @@ Demo 工程不包含 JS、Expo Module 或 Android 目录。领域对象、Provid
 
 ## 5. Key存储与请求安全
 
-### 5.1 已确认Demo方案
+### 5.1 已确认首版方案
 
-每个内测用户输入产品负责人发放的独立临时 Key。按照已确认决策，Demo 使用普通本地键值存储，而不是 Keychain/SecureStore。
+每个内测用户输入产品负责人发放的独立临时 Key。按照已确认决策，首版使用普通本地键值存储，而不是 Keychain/SecureStore。
 
-SwiftUI Demo 使用协议屏蔽具体存储：
+SwiftUI 首版使用协议屏蔽具体存储：
 
 ```swift
 protocol CredentialStore {
@@ -217,7 +217,7 @@ protocol CredentialStore {
 }
 ```
 
-Demo 的 `UserDefaultsCredentialStore` 使用普通 `UserDefaults`；正式版移除该协议保存供应商 Key 的用途。该选择不代表安全存储最佳实践，只是用户为受控 Demo 明确接受的临时方案。
+首版的 `UserDefaultsCredentialStore` 使用普通 `UserDefaults`；正式版移除该协议保存供应商 Key 的用途。该选择不代表安全存储最佳实践，只是用户为受控首版明确接受的临时方案。
 
 ### 5.2 风险控制
 
@@ -228,9 +228,9 @@ Demo 的 `UserDefaultsCredentialStore` 使用普通 `UserDefaults`；正式版�
 - 禁止把完整请求头序列化进错误对象。
 - 禁止崩溃上报包含 Key。
 - 设置页只能删除和替换，不能复制出完整 Key。
-- Demo 结束撤销全部 Key。
+- 首版结束撤销全部 Key。
 
-普通存储的机密性不足是已接受的 Demo 风险。正式版不通过“换成Keychain”继续该模式，而是由后端持有供应商凭证并按 Credits 授权。
+普通存储的机密性不足是已接受的首版风险。正式版不通过“换成Keychain”继续该模式，而是由后端持有供应商凭证并按 Credits 授权。
 
 ## 6. 领域模型
 
@@ -540,9 +540,9 @@ Apple格式参考：
 - [PHAssetResourceType.pairedVideo](https://developer.apple.com/documentation/photos/phassetresourcetype/pairedvideo)
 - [PHAssetCreationRequest](https://developer.apple.com/documentation/photos/phassetcreationrequest)
 
-## 14. Android Motion Photo Spike（非 Demo 交付）
+## 14. Android Motion Photo Spike（非首版交付）
 
-本节仅保留未来验证契约。SwiftUI Demo 不包含 Android 客户端、Kotlin 模块、MediaStore 写入或 Motion Photo 用户入口。只有 iOS Demo 获得真实发布和复用反馈后，才执行本节 Spike。
+本节仅保留未来验证契约。SwiftUI 首版不包含 Android 客户端、Kotlin 模块、MediaStore 写入或 Motion Photo 用户入口。只有 iOS 首版获得真实发布和复用反馈后，才执行本节 Spike。
 
 ### 14.1 未来逻辑接口
 
@@ -664,7 +664,7 @@ interface AppError {
 
 ## 19. 正式版迁移契约
 
-Demo之后迁移服务端时保持以下逻辑契约不变：
+首版之后迁移服务端时保持以下逻辑契约不变：
 
 - `MediaProvider` 的逻辑输入输出。
 - `GenerationJob` 状态机。
@@ -674,7 +674,7 @@ Demo之后迁移服务端时保持以下逻辑契约不变：
 将 `DirectProviderAdapter` 替换为 `MusesBackendAdapter`：
 
 ```text
-Demo: App → 固定供应商
+首版: App → 固定供应商
 正式: App → Muses后端 → Provider Adapter → 供应商
 ```
 
@@ -690,14 +690,14 @@ Demo: App → 固定供应商
 
 ## 20. 开发前置清单
 
-- [ ] 固定 Demo Endpoint 已确认并使用 HTTPS。
+- [x] 固定首版 Endpoint 已确认并使用 HTTPS。
 - [ ] 文本模型名已填入 JSON。
 - [ ] 视频模型名已填入 JSON。
 - [ ] 图片参考图接口、字段和返回格式已用最小请求验证。
 - [ ] 视频创建/查询接口和全部状态值已记录。
 - [ ] 每位测试用户的独立 Key 已配置限额和有效期。
 - [ ] iOS开发签名和测试设备可用。
-- [ ] SwiftUI Demo 的最低 iOS 版本与目标 iPhone 已记录。
+- [x] SwiftUI 首版的最低 iOS 版本已记录为 iOS 17；目标 iPhone 待用户确认。
 - [ ] 供应商素材保留、训练使用和删除规则已确认并写入内测说明。
 - [ ] 小红书真实发布测试由用户人工执行，不通过自动化代发。
 
@@ -705,8 +705,8 @@ Demo: App → 固定供应商
 
 截至本文 V0.2 修订日期：
 
-- SwiftUI Demo 工程尚未创建。
-- 当前仓库中的 RN/Expo 工程属于被替换的旧 Demo 技术路线，不能作为 SwiftUI Demo 已实现的证据。
+- SwiftUI 首版工程已创建并统一命名为 `Muses`。
+- 工程结构与关键调用路径已经静态检查，但未执行编译或运行验证。
 - 尚未运行 SwiftUI iOS 构建或真机验证。
 - 尚未调用真实文本、图片或视频接口。
 - 尚未生成或保存真实 Live Photo。
