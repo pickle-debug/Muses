@@ -3,22 +3,22 @@ import UIKit
 
 /// SwiftUI pages hosted by the system tab controller so iOS owns tab scrubbing.
 @available(iOS 26.0, *)
-struct NativeWorkspaceTabs: UIViewControllerRepresentable {
+struct MTabs: UIViewControllerRepresentable {
     @EnvironmentObject private var app: AppModel
 
-    func makeUIViewController(context: Context) -> NativeWorkspaceTabController {
-        NativeWorkspaceTabController(app: app)
+    func makeUIViewController(context: Context) -> MTabbarController {
+        MTabbarController(app: app)
     }
 
-    func updateUIViewController(_ controller: NativeWorkspaceTabController, context: Context) {
+    func updateUIViewController(_ controller: MTabbarController, context: Context) {
         controller.synchronizeSelection()
     }
 }
 
 @available(iOS 26.0, *)
-final class NativeWorkspaceTabController: UITabBarController, UITabBarControllerDelegate {
+final class MTabbarController: UITabBarController, UITabBarControllerDelegate {
     private let app: AppModel
-    private var publishHost: UIHostingController<NativePublishButton>?
+    private var publishHost: UIHostingController<PublishButton>?
 
     init(app: AppModel) {
         self.app = app
@@ -36,7 +36,7 @@ final class NativeWorkspaceTabController: UITabBarController, UITabBarController
         tabBar.tintColor = UIColor(MusesTheme.coral)
         tabBar.unselectedItemTintColor = UIColor(MusesTheme.ink)
 
-        viewControllers = WorkspaceTab.allCases.map { tab in
+        viewControllers = MTab.allCases.map { tab in
             let controller: UIViewController
             if tab == .publish {
                 controller = UIViewController()
@@ -50,9 +50,10 @@ final class NativeWorkspaceTabController: UITabBarController, UITabBarController
             return controller
         }
         // UIKit keeps its own native selection gesture; the center slot is action-only.
-        selectedIndex = WorkspaceTab.allCases.firstIndex(of: app.selectedTab) ?? 0
+        selectedIndex = MTab.allCases.firstIndex(of: app.selectedTab) ?? 0
 
-        let host = UIHostingController(rootView: NativePublishButton(app: app))
+        // 切换特效版：将下一行改为 CometPublishButton(app: app)
+        let host = UIHostingController(rootView: PublishButton(app: app))
         host.safeAreaRegions = []
         host.view.backgroundColor = .clear
         host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -77,7 +78,7 @@ final class NativeWorkspaceTabController: UITabBarController, UITabBarController
 
     func synchronizeSelection() {
         guard isViewLoaded else { return }
-        if let index = WorkspaceTab.allCases.firstIndex(of: app.selectedTab), selectedIndex != index {
+        if let index = MTab.allCases.firstIndex(of: app.selectedTab), selectedIndex != index {
             selectedIndex = index
         }
         tabBar.isUserInteractionEnabled = !app.isWorking
@@ -85,7 +86,7 @@ final class NativeWorkspaceTabController: UITabBarController, UITabBarController
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
         guard !app.isWorking, let index = viewControllers?.firstIndex(of: viewController) else { return false }
-        let tab = WorkspaceTab.allCases[index]
+        let tab = MTab.allCases[index]
         app.selectTab(tab)
         return tab != .publish
     }
@@ -95,20 +96,27 @@ final class NativeWorkspaceTabController: UITabBarController, UITabBarController
 }
 
 @available(iOS 26.0, *)
-private struct NativePublishButton: View {
+private struct PublishButton: View {
     @ObservedObject var app: AppModel
+    @State private var isPressing = false
 
     var body: some View {
         Button { app.selectTab(.publish) } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 29, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: 60, height: 60)
-                .contentShape(Circle())
-                .glassEffect(.regular.tint(MusesTheme.coral).interactive(), in: Circle())
+            ZStack {
+                if isPressing {
+                    Circle().stroke(MusesTheme.coral.opacity(0.4), lineWidth: 7)
+                        .frame(width: 78, height: 78).scaleEffect(1.16).opacity(0.35)
+                        .animation(.easeOut(duration: 0.9).repeatForever(autoreverses: false), value: isPressing)
+                }
+                Image(systemName: isPressing ? "waveform" : "plus")
+                    .font(.system(size: isPressing ? 25 : 29, weight: .medium))
+                    .foregroundStyle(.white).frame(width: 60, height: 60).contentShape(Circle())
+                    .glassEffect(.regular.tint(MusesTheme.coral).interactive(), in: Circle())
+            }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(WorkspaceTab.publish.rawValue)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.01).onChanged { _ in isPressing = true }.onEnded { _ in isPressing = false })
+        .accessibilityLabel(MTab.publish.rawValue)
         .accessibilityIdentifier("workspace.tab.publish")
         .accessibilityAddTraits(app.isQuickPublishPresented ? .isSelected : [])
         .disabled(app.isWorking)

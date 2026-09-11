@@ -7,11 +7,11 @@ struct AppRootView: View {
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                NativeWorkspaceTabs()
+                MTabs()
                     .ignoresSafeArea()
             } else {
                 WorkspaceScreenView(tab: app.selectedTab)
-                    .safeAreaInset(edge: .bottom, spacing: 0) { WorkspaceTabBar() }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { MTabBar() }
             }
         }
         .background(MusesBackground())
@@ -57,7 +57,7 @@ struct AppRootView: View {
 
 struct WorkspaceScreenView: View {
     @EnvironmentObject private var app: AppModel
-    let tab: WorkspaceTab
+    let tab: MTab
 
     var body: some View {
         ZStack {

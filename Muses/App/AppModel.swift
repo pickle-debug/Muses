@@ -27,7 +27,7 @@ enum WorkflowOperation: Equatable {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var screen: AppScreen = .history
-    @Published var selectedTab: WorkspaceTab = .products
+    @Published var selectedTab: MTab = .products
     @Published var isQuickPublishPresented = false
     @Published var sku = ""
     @Published var revisionNote = ""
@@ -1317,7 +1317,7 @@ extension AppModel {
         return creation.tracking != nil || creations(for: productID).last?.id != creation.id
     }
 
-    func selectTab(_ tab: WorkspaceTab) {
+    func selectTab(_ tab: MTab) {
         guard !isWorking else { return }
         if tab == .publish {
             screen = .history

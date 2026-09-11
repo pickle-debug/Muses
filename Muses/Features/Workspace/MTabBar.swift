@@ -1,7 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum WorkspaceTab: String, CaseIterable {
+enum MTab: String, CaseIterable {
     case selection = "AI选品", products = "我的商品", publish = "快速发布", followUp = "销售跟进", settings = "个人设置"
     var icon: String {
         switch self {
@@ -14,12 +14,13 @@ enum WorkspaceTab: String, CaseIterable {
     }
 }
 
-struct WorkspaceTabBar: View {
+struct MTabBar: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var keyboardVisible = false
     @Namespace private var selection
+    @State private var isPressingPublish = false
 
     var body: some View {
         Group {
@@ -57,7 +58,7 @@ struct WorkspaceTabBar: View {
 
     private var tabItems: some View {
         HStack(spacing: 0) {
-            ForEach(Array(WorkspaceTab.allCases.enumerated()), id: \.element) { index, tab in
+            ForEach(Array(MTab.allCases.enumerated()), id: \.element) { index, tab in
                 if tab == .publish {
                     // Layout only: no image, selection background or accessibility element.
                     Color.clear
@@ -74,13 +75,30 @@ struct WorkspaceTabBar: View {
     }
 
     private var publishButton: some View {
+        // 切换特效版：取消下一行注释，并注释 originalPublishButton
+         CometPublishButton(app: app)
+//        originalPublishButton
+    }
+
+    private var originalPublishButton: some View {
         Button { app.selectTab(.publish) } label: {
-            publishSymbol
-                .background(MusesTheme.coral.gradient, in: Circle())
-                .shadow(color: MusesTheme.coral.opacity(0.18), radius: 8, y: 4)
+            ZStack {
+                if isPressingPublish && !reduceMotion {
+                    Circle().stroke(MusesTheme.coral.opacity(0.35), lineWidth: 8)
+                        .frame(width: 82, height: 82)
+                        .scaleEffect(isPressingPublish ? 1.18 : 0.9)
+                        .opacity(isPressingPublish ? 0.35 : 0)
+                        .animation(.easeOut(duration: 0.9).repeatForever(autoreverses: false), value: isPressingPublish)
+                }
+                publishSymbol
+                    .background(MusesTheme.coral.gradient, in: Circle())
+                    .shadow(color: MusesTheme.coral.opacity(isPressingPublish ? 0.42 : 0.18), radius: isPressingPublish ? 18 : 8, y: 4)
+            }
         }
         .buttonStyle(FloatingTabPressStyle())
-        .accessibilityLabel(WorkspaceTab.publish.rawValue)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.01).onChanged { _ in isPressingPublish = true }.onEnded { _ in isPressingPublish = false })
+        .onChange(of: app.isQuickPublishPresented) { _, presented in if !presented { isPressingPublish = false } }
+        .accessibilityLabel(MTab.publish.rawValue)
         .accessibilityIdentifier("workspace.tab.publish")
         .disabled(app.isWorking)
     }
@@ -93,7 +111,7 @@ struct WorkspaceTabBar: View {
             .contentShape(Circle())
     }
 
-    private func tabButton(_ tab: WorkspaceTab) -> some View {
+    private func tabButton(_ tab: MTab) -> some View {
         let isSelected = app.selectedTab == tab
         return Button { app.selectTab(tab) } label: {
             VStack(spacing: 5) {
@@ -139,6 +157,7 @@ private struct FloatingTabPressStyle: ButtonStyle {
 struct QuickPublishView: View {
     @EnvironmentObject private var app: AppModel
     @State private var showImporter = false
+    @State private var showVoiceHint = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -149,8 +168,18 @@ struct QuickPublishView: View {
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                     Text("录入商品 · 生成图文 · 逐版优化 · 跟进转化")
                         .font(.subheadline).foregroundStyle(MusesTheme.secondaryInk)
-                    PrimaryButton(title: "手动录入 SKU", icon: "plus") { app.startNewProduct() }
-                    SecondaryButton(title: "从文件批量导入", icon: "square.and.arrow.down") { showImporter = true }
+                    Text("告诉我你要发布什么，Muses 会帮你整理成 SKU。")
+                        .font(.subheadline.weight(.medium)).foregroundStyle(MusesTheme.ink)
+                    Button { app.startNewProduct(); showVoiceHint = true } label: {
+                        Label("按住说，松开生成", systemImage: "waveform")
+                            .font(.headline.weight(.bold)).frame(maxWidth: .infinity).frame(minHeight: 56)
+                            .foregroundStyle(.white).background(MusesTheme.ink, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }.buttonStyle(.plain)
+                    HStack(spacing: 10) {
+                        publishOption("相册识别", icon: "photo.on.rectangle.angled") { app.startNewProduct() }
+                        publishOption("导入表格", icon: "tablecells") { showImporter = true }
+                    }
+                    if showVoiceHint { Text("已进入录入页，可以直接说出商品名、卖点和规格。") .font(.caption).foregroundStyle(MusesTheme.secondaryInk) }
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,6 +218,10 @@ struct QuickPublishView: View {
             }
         }
         .disabled(app.isWorking)
+    }
+
+    private func publishOption(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Label(title, systemImage: icon).font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).frame(minHeight: 48).foregroundStyle(MusesTheme.ink).background(.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 15)).overlay { RoundedRectangle(cornerRadius: 15).stroke(MusesTheme.line, lineWidth: 1) } }.buttonStyle(.plain)
     }
 }
 
