@@ -5,8 +5,8 @@ enum MusesTheme {
     static let surface = Color(red: 1.0, green: 0.997, blue: 0.984)
     static let ink = Color(red: 0.14, green: 0.13, blue: 0.12)
     static let secondaryInk = Color(red: 0.46, green: 0.43, blue: 0.39)
-    static let coral = Color(red: 0.98, green: 0.31, blue: 0.27)
-    static let coralSoft = Color(red: 1.0, green: 0.91, blue: 0.87)
+    static let coral = Color(red: 0.24, green: 0.68, blue: 0.92)
+    static let coralSoft = Color(red: 0.84, green: 0.95, blue: 1.0)
     static let green = Color(red: 0.39, green: 0.64, blue: 0.23)
     static let greenSoft = Color(red: 0.92, green: 0.96, blue: 0.86)
     static let success = green
@@ -88,7 +88,7 @@ struct PrimaryButton: View {
             .foregroundStyle(.white)
             .background(
                 LinearGradient(
-                    colors: [MusesTheme.coral, Color(red: 1, green: 0.39, blue: 0.31)],
+                    colors: [MusesTheme.coral, Color(red: 0.42, green: 0.80, blue: 1.0)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
