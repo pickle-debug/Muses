@@ -65,6 +65,10 @@ struct FactConfirmationView: View {
                 }
                 .buttonStyle(.plain)
 
+                SurfaceCard {
+                    MusesTextField(title: "本版本优化方向（选填）", icon: "wand.and.stars", placeholder: "例如：突出杯身刻度，文案更简洁", text: $app.revisionNote, axis: .vertical)
+                }
+
                 InfoBanner(text: "高成本操作：下一步将用 \(app.imageModelName) 生成 1 张 3:4 图片。", kind: .neutral)
                 PrimaryButton(title: "确认并生成", icon: "sparkles", disabled: !app.canConfirmFacts) {
                     Task { await app.confirmFactsAndGenerate() }

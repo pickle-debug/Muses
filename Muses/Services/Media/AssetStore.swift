@@ -18,7 +18,12 @@ actor AssetStore {
     }
 
     func importSource(from sourceURL: URL, productID: MusesID, preferredFileName: String? = nil) throws -> LocalAsset {
-        try storeFile(from: sourceURL, relativeDirectory: "sources/\(productID.uuidString)", kind: .sourceImage, preferredFileName: preferredFileName)
+        guard try resourceSize(at: sourceURL) <= 31_457_280,
+              let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              CGImageSourceGetCount(source) > 0 else {
+            throw AppError.safe("SOURCE_IMAGE_INVALID", "请选择有效的商品图片，每张不能超过 30 MB。")
+        }
+        return try storeFile(from: sourceURL, relativeDirectory: "sources/\(productID.uuidString)", kind: .sourceImage, preferredFileName: preferredFileName)
     }
 
     func importGenerated(from sourceURL: URL, creationID: MusesID, kind: AssetKind, preferredFileName: String? = nil) throws -> LocalAsset {
@@ -104,7 +109,8 @@ actor AssetStore {
         let byteCount = try resourceSize(at: sourceURL)
         guard byteCount > 0 else { throw AppError.safe("ASSET_INVALID", "媒体文件为空") }
         let hash = try sha256(at: sourceURL)
-        let ext = URL(fileURLWithPath: preferredFileName ?? sourceURL.lastPathComponent).pathExtension.isEmpty ? sourceURL.pathExtension : URL(fileURLWithPath: preferredFileName ?? "").pathExtension
+        let preferredExtension = preferredFileName.map { URL(fileURLWithPath: $0).pathExtension } ?? ""
+        let ext = preferredExtension.isEmpty ? sourceURL.pathExtension : preferredExtension
         let directory = rootURL.appending(path: relativeDirectory, directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let fileName = "\(hash).\(ext.isEmpty ? "bin" : ext.lowercased())"

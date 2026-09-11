@@ -6,14 +6,15 @@ struct CopyResultView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                PageHeader(title: "文案结果", subtitle: "选择标题、修改正文并删除不需要的话题", step: "4 / 4  文案", backAction: { app.screen = .videoReview })
+                PageHeader(title: "文案结果", subtitle: "选择标题、修改正文并删除不需要的话题", step: "4 / 4  文案", backAction: { if let product = app.activeProduct { app.showProduct(product) } })
+                if app.isCurrentVersionReadOnly { InfoBanner(text: "此版本已归档或登记帖子，保留原内容。需要调整时，请从商品详情升级下一版。", kind: .neutral) }
                 InfoBanner(text: "AI 内容，请核对商品事实。禁止虚构经历、价格、疗效、权威背书或未经确认的评价。", kind: .warning)
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("选择标题").font(.title3.weight(.bold))
                         ForEach(app.copyTitles.indices, id: \.self) { index in
-                            Button { app.selectedTitleIndex = index } label: {
+                            Button { if !app.isCurrentVersionReadOnly { app.selectedTitleIndex = index } } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: app.selectedTitleIndex == index ? "largecircle.fill.circle" : "circle")
                                         .foregroundStyle(app.selectedTitleIndex == index ? MusesTheme.coral : MusesTheme.secondaryInk.opacity(0.5))
@@ -34,6 +35,7 @@ struct CopyResultView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack { Text("正文内容").font(.title3.weight(.bold)); Spacer(); Image(systemName: "pencil") }
                         TextEditor(text: $app.copyBody)
+                            .disabled(app.isCurrentVersionReadOnly)
                             .frame(minHeight: 210)
                             .scrollContentBackground(.hidden)
                             .padding(8)
@@ -47,6 +49,7 @@ struct CopyResultView: View {
                         FlowLayout(spacing: 8) {
                             ForEach(app.copyTopics, id: \.self) { topic in
                                 Button {
+                                    guard !app.isCurrentVersionReadOnly else { return }
                                     app.copyTopics.removeAll { $0 == topic }
                                 } label: {
                                     HStack(spacing: 5) {
@@ -66,7 +69,7 @@ struct CopyResultView: View {
                 }
 
                 if case .failed(let message) = app.operation { InfoBanner(text: message, kind: .warning) }
-                PrimaryButton(title: "确认内容", icon: "checkmark", disabled: app.copyTitles.isEmpty || app.copyBody.trimmed.isEmpty || app.copyTopics.isEmpty) {
+                PrimaryButton(title: app.isCurrentVersionReadOnly ? "查看保存与发布" : "确认内容", icon: "checkmark", disabled: app.copyTitles.isEmpty || app.copyBody.trimmed.isEmpty || app.copyTopics.isEmpty) {
                     Task { await app.confirmCopy() }
                 }
                 .padding(.bottom, 24)
@@ -95,15 +98,20 @@ struct SaveResultView: View {
                             if savedMediaCount > 0 { StatusPill(text: "已保存 \(savedMediaCount) 项", tone: .success) }
                         }
                         HStack(spacing: 10) {
-                            ExportItem(icon: "livephoto", title: "Live Photo", subtitle: "iPhone 实况", status: app.exportRecord?.livePhotoStatus ?? .notRequested)
-                            ExportItem(icon: "play.rectangle", title: "MP4", subtitle: "通用保底", status: app.exportRecord?.videoStatus ?? .notRequested)
+                            if app.generatedVideoAsset != nil {
+                                ExportItem(icon: "livephoto", title: "Live Photo", subtitle: "iPhone 实况", status: app.exportRecord?.livePhotoStatus ?? .notRequested)
+                                ExportItem(icon: "play.rectangle", title: "MP4", subtitle: "通用保底", status: app.exportRecord?.videoStatus ?? .notRequested)
+                            }
                             ExportItem(icon: "photo", title: "静态图", subtitle: "3:4 原图", status: app.exportRecord?.imageStatus ?? .notRequested)
                         }
                         if app.connectionState == .preview {
                             InfoBanner(text: "预览模式没有真实生成媒体，因此不会向系统相册写入文件。", kind: .warning)
                         }
-                        PrimaryButton(title: "保存 3 项媒体", icon: "square.and.arrow.down", isLoading: isWorking, disabled: !app.hasRealGeneratedMedia) {
-                            Task { await app.saveAllMedia() }
+                        PrimaryButton(title: app.hasRealGeneratedMedia ? "保存 3 项媒体" : "保存图片", icon: "square.and.arrow.down", isLoading: isWorking, disabled: app.generatedImageAsset?.kind != .generatedImage) {
+                            Task {
+                                if app.hasRealGeneratedMedia { await app.saveAllMedia() }
+                                else { await app.saveStaticImage() }
+                            }
                         }
                         if hasSaveFailure {
                             SecondaryButton(title: "打开系统设置", icon: "gear") { Task { await app.openSystemSettings() } }
@@ -131,7 +139,9 @@ struct SaveResultView: View {
                 }
 
                 InfoBanner(text: "发布前请再次核对商品事实与平台规范；保存记录不代表已经发布。", kind: .neutral)
-                SecondaryButton(title: "返回创作记录", icon: "clock.arrow.circlepath") { app.screen = .history }
+                SecondaryButton(title: "查看版本与帖子数据", icon: "chart.bar") {
+                    if let product = app.activeProduct { app.showProduct(product) }
+                }
                     .padding(.bottom, 24)
             }
             .frame(maxWidth: 720)

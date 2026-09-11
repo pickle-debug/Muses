@@ -25,12 +25,16 @@ struct ImageReviewView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 ProductMediaHero(asset: app.generatedImageAsset)
                 ReviewChecklist(items: app.imageReviewItems, selected: $app.selectedImageChecks)
-                InfoBanner(text: "这是人工审核门。所有项目由你确认后，才允许进入 AI 动态生成。", kind: .neutral)
+                InfoBanner(text: "确认图片中的商品一致后，生成本版本的小红书文案。", kind: .neutral)
+                if case .failed(let message) = app.operation { InfoBanner(text: message, kind: .warning) }
                 VStack(spacing: 12) {
-                    PrimaryButton(title: "商品一致，可以继续", icon: "checkmark.circle", disabled: !app.imageReviewComplete) {
-                        Task { await app.approveImageAndGenerateVideo() }
+                    PrimaryButton(title: "通过并生成文案", icon: "text.badge.plus", isLoading: app.isWorking, disabled: !app.imageReviewComplete) {
+                        Task { await app.approveImageAndGenerateCopy() }
                     }
-                    SecondaryButton(title: "有问题，重新生成", icon: "arrow.clockwise", destructive: true) { showIssues = true }
+                    SecondaryButton(title: "可选：先生成 AI 动态", icon: "play.rectangle") {
+                        Task { await app.approveImageAndGenerateVideo() }
+                    }.disabled(!app.imageReviewComplete || app.isWorking)
+                    SecondaryButton(title: "有问题，重新生成", icon: "arrow.clockwise", destructive: true) { showIssues = true }.disabled(app.isWorking)
                 }
                 .padding(.bottom, 24)
             }
@@ -69,7 +73,7 @@ struct VideoReviewView: View {
                     PrimaryButton(title: "动态通过", icon: "checkmark.circle", disabled: !app.videoReviewComplete) {
                         Task { await app.approveVideoAndGenerateCopy() }
                     }
-                    SecondaryButton(title: "只重新生成动态", icon: "arrow.clockwise", destructive: true) { showIssues = true }
+                    SecondaryButton(title: "只重新生成动态", icon: "arrow.clockwise", destructive: true) { showIssues = true }.disabled(app.isWorking)
                 }
                 .padding(.bottom, 24)
             }

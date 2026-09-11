@@ -10,15 +10,15 @@ struct SetupView: View {
             VStack(spacing: 24) {
                 VStack(spacing: 14) {
                     MusesLogo()
-                    Text("开始使用 Muses")
+                    Text("个人设置")
                         .font(.system(size: 36, weight: .bold, design: .rounded))
-                    Text("连接你的 AI 服务")
+                    Text("管理 AI 服务与本机偏好")
                         .font(.title3)
                         .foregroundStyle(MusesTheme.secondaryInk)
                 }
                 .padding(.top, 34)
 
-                InfoBanner(text: "本次测试会将你选择的商品素材发送到开发者配置的生成服务。请仅上传你有权使用的素材。", kind: .warning)
+                InfoBanner(text: "商品录入、版本查看和销售跟进无需 API Key。连接 AI 服务后，即可生成商品图文。", kind: .neutral)
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 20) {
@@ -82,7 +82,7 @@ struct SetupView: View {
                         }
 
                         PrimaryButton(
-                            title: app.connectionState == .preview ? "进入预览" : "保存并继续",
+                            title: app.connectionState == .preview ? "进入预览" : "完成设置",
                             icon: "arrow.right",
                             disabled: app.connectionState != .connected && app.connectionState != .preview
                         ) { app.saveSetupAndContinue() }

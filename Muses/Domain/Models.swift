@@ -91,6 +91,7 @@ struct Product: Codable, Identifiable, Sendable {
     let createdAt: Date
     var currentSnapshotID: MusesID
     var status: ProductStatus
+    var sku: String? = nil
 }
 
 struct ProductSnapshot: Codable, Identifiable, Sendable {
@@ -123,6 +124,38 @@ struct Creation: Codable, Identifiable, Sendable {
     var status: CreationStatus
     let createdAt: Date
     var updatedAt: Date
+    var versionNumber: Int? = nil
+    var revisionNote: String? = nil
+    var isPreview: Bool? = nil
+    var tracking: PostTracking? = nil
+}
+
+struct PostTracking: Codable, Sendable {
+    var postURL: String
+    var publishedAt: Date
+    var samples: [PostMetrics]
+}
+
+struct PostMetrics: Codable, Identifiable, Sendable {
+    var id: UUID = UUID()
+    var recordedAt: Date = .now
+    var views: Int
+    var likes: Int
+    var saves: Int
+    var comments: Int
+    var inquiries: Int
+    var orders: Int
+    var revenue: Double
+    var note: String
+
+    var conversionRate: Double? { views > 0 ? Double(orders) / Double(views) : nil }
+
+    func validate() throws {
+        guard [views, likes, saves, comments, inquiries, orders].allSatisfy({ $0 >= 0 && $0 <= 1_000_000_000 }),
+              revenue.isFinite, revenue >= 0, revenue <= 1_000_000_000 else {
+            throw AppError.safe("METRICS_INVALID", "请填写有效的非负数据，数值不能超过 10 亿。")
+        }
+    }
 }
 
 struct GenerationJob: Codable, Identifiable, Sendable {

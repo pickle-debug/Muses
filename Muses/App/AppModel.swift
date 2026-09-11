@@ -5,6 +5,7 @@ import UIKit
 enum AppScreen: Hashable {
     case setup
     case history
+    case productDetail(MusesID)
     case product
     case factConfirmation
     case imageGeneration
@@ -25,7 +26,12 @@ enum WorkflowOperation: Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var screen: AppScreen = .setup
+    @Published var screen: AppScreen = .history
+    @Published var selectedTab: WorkspaceTab = .products
+    @Published var isQuickPublishPresented = false
+    @Published var sku = ""
+    @Published var revisionNote = ""
+    @Published var isLoadingLocalState = true
     @Published var snapshot = AppSnapshot()
     @Published var connectionState: ConnectionState = .idle
     @Published var operation: WorkflowOperation = .idle
@@ -130,28 +136,34 @@ final class AppModel: ObservableObject {
     init() {
         credentialStore = UserDefaultsCredentialStore()
         do {
-            let config = try ProviderConfigurationLoader.load(allowPlaceholders: true)
-            configuration = config
             let snapshots = try SnapshotStore()
             let assets = try AssetStore()
             snapshotStore = snapshots
             assetStore = assets
+            livePhotoService = LivePhotoService()
+            Task { await loadLocalState() }
+            let config = try ProviderConfigurationLoader.load(allowPlaceholders: true)
+            configuration = config
             let containsPlaceholder = config.provider.baseUrl.host?.hasSuffix(".invalid") == true
                 || config.models.text.uppercased().contains("REPLACE_ME")
                 || config.models.video.uppercased().contains("REPLACE_ME")
             if !containsPlaceholder {
                 provider = try OpenAIStyleProviderClient(configuration: config, credentialStore: credentialStore)
             }
-            livePhotoService = LivePhotoService()
-            Task { await loadLocalState() }
         } catch {
-            alert = AppAlert.from(error)
+            if snapshotStore == nil {
+                isLoadingLocalState = false
+                alert = AppAlert.from(error)
+            } else {
+                connectionState = .failed(AppAlert.from(error).message)
+            }
         }
     }
 
     #if DEBUG
     init(previewing: Bool) {
         precondition(previewing)
+        isLoadingLocalState = false
         let defaults = UserDefaults(suiteName: "Muses.XcodePreview")!
         credentialStore = UserDefaultsCredentialStore(defaults: defaults)
         configuration = try? ProviderConfigurationLoader.load(allowPlaceholders: true)
@@ -159,10 +171,10 @@ final class AppModel: ObservableObject {
     #endif
 
     func loadLocalState() async {
+        defer { isLoadingLocalState = false }
         guard let snapshotStore else { return }
         do {
             snapshot = try await snapshotStore.normalizeInterruptedSubmissions()
-            if credentialStore.apiKey() != nil || !snapshot.products.isEmpty { screen = .history }
         } catch {
             alert = AppAlert.from(error)
         }
@@ -204,7 +216,7 @@ final class AppModel: ObservableObject {
 
     func saveSetupAndContinue() {
         guard connectionState == .connected || connectionState == .preview else { return }
-        screen = .history
+        selectTab(.publish)
     }
 
     func deleteCredential() {
@@ -214,6 +226,9 @@ final class AppModel: ObservableObject {
     }
 
     func startNewProduct() {
+        guard !isWorking else { return }
+        sku = ""
+        revisionNote = ""
         pollingTask?.cancel()
         imageGenerationTask?.cancel()
         videoGenerationTask?.cancel()
@@ -264,6 +279,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func addPhotoFile(_ url: URL) async throws {
+        guard !isWorking, sourceAssets.count < 6, let productID = currentProductID, let assetStore else { return }
+        let asset = try await assetStore.importSource(from: url, productID: productID)
+        guard !sourceAssets.contains(where: { $0.sha256 == asset.sha256 }) else { return }
+        sourceAssets.append(asset)
+    }
+
     func removeSource(_ asset: LocalAsset) {
         sourceAssets.removeAll { $0.id == asset.id }
     }
@@ -285,6 +307,7 @@ final class AppModel: ObservableObject {
     }
 
     func recognizeProduct() async {
+        guard !isWorking, requireAIService() else { return }
         guard let productID = currentProductID, !productName.trimmed.isEmpty, !sellingPoint.trimmed.isEmpty else {
             alert = AppAlert(title: "信息不完整", message: "请填写商品名称和一句话真实卖点。")
             return
@@ -322,13 +345,13 @@ final class AppModel: ObservableObject {
 
             let snapshotID = UUID()
             currentSnapshotID = snapshotID
-            let product = Product(id: productID, name: productName, createdAt: .now, currentSnapshotID: snapshotID, status: .factsPending)
+            let product = Product(id: productID, name: productName.trimmed, createdAt: snapshot.products.first(where: { $0.id == productID })?.createdAt ?? .now, currentSnapshotID: snapshotID, status: .factsPending, sku: sku.nilIfEmpty)
             let factSnapshot = makeProductSnapshot(id: snapshotID, productID: productID, confirmed: false)
             try await commit { state in
                 state.products.removeAll { $0.id == productID }
                 state.products.append(product)
                 state.productSnapshots.append(factSnapshot)
-                state.assets.append(contentsOf: sourceAssets)
+                state.assets.append(contentsOf: sourceAssets.filter { asset in !state.assets.contains(where: { $0.id == asset.id }) })
             }
             operation = .idle
             isImageSubmissionUnknown = false
@@ -339,7 +362,13 @@ final class AppModel: ObservableObject {
     }
 
     func confirmFactsAndGenerate() async {
-        guard canConfirmFacts, let productID = currentProductID, let oldSnapshotID = currentSnapshotID else { return }
+        guard !isWorking, requireAIService(), canConfirmFacts, let productID = currentProductID, let oldSnapshotID = currentSnapshotID else { return }
+        guard creations(for: productID).allSatisfy({ [.ready, .saved].contains($0.status) }) else {
+            alert = AppAlert(title: "先完成当前版本", message: "请继续已有版本，完成图文后再升级下一版。")
+            return
+        }
+        operation = .working("正在创建内容版本")
+        let versionNumber = (creations(for: productID).compactMap(\.versionNumber).max() ?? creations(for: productID).count) + 1
         let confirmedID = UUID()
         let creationID = UUID()
         let jobID = UUID()
@@ -347,13 +376,13 @@ final class AppModel: ObservableObject {
         currentCreationID = creationID
         imageJobID = jobID
         let confirmed = makeProductSnapshot(id: confirmedID, productID: productID, confirmed: true)
-        let creation = Creation(id: creationID, productSnapshotID: confirmedID, platform: .xiaohongshu, template: .handheldLifestyleV1, imageJobID: jobID, status: .generatingImage, createdAt: .now, updatedAt: .now)
+        let creation = Creation(id: creationID, productSnapshotID: confirmedID, platform: .xiaohongshu, template: .handheldLifestyleV1, imageJobID: jobID, status: .generatingImage, createdAt: .now, updatedAt: .now, versionNumber: versionNumber, revisionNote: revisionNote.nilIfEmpty, isPreview: connectionState == .preview)
         let prompt = imagePrompt(for: confirmed, reviewIssues: [])
         let promptVersion = PromptVersion(id: UUID(), productSnapshotID: confirmedID, templateVersion: CreativeTemplate.handheldLifestyleV1.rawValue, prompt: prompt, negativeConstraints: confirmed.lockedFeatures, precedingReviewIssues: [], model: imageModelName, providerSchemaVersion: configuration?.schemaVersion ?? 1, parameters: ["ratio": "3:4", "count": "1"], createdAt: .now)
         let job = GenerationJob(id: jobID, kind: .image, creationID: creationID, idempotencyKey: UUID(), model: imageModelName, promptVersionID: promptVersion.id, status: .draft, outputAssetIDs: [])
         do {
             try await commit { state in
-                state.productSnapshots.removeAll { $0.id == oldSnapshotID }
+                state.productSnapshots.removeAll { $0.id == oldSnapshotID && !state.creations.contains(where: { $0.productSnapshotID == oldSnapshotID }) }
                 state.productSnapshots.append(confirmed)
                 if let index = state.products.firstIndex(where: { $0.id == productID }) {
                     state.products[index].currentSnapshotID = confirmedID
@@ -365,7 +394,7 @@ final class AppModel: ObservableObject {
             }
             screen = .imageGeneration
             imageGenerationTask = Task { await generateImage(prompt: prompt) }
-        } catch { alert = AppAlert.from(error) }
+        } catch { operation = .idle; alert = AppAlert.from(error) }
     }
 
     func generateImage(prompt: String? = nil, reviewIssues: [ReviewIssue] = []) async {
@@ -765,12 +794,15 @@ final class AppModel: ObservableObject {
     }
 
     func retryCopyGeneration() async {
-        operation = .idle
+        await approveVideoAndGenerateCopy()
+    }
+
+    func approveImageAndGenerateCopy() async {
         await approveVideoAndGenerateCopy()
     }
 
     func approveVideoAndGenerateCopy() async {
-        guard videoReviewComplete, let creationID = currentCreationID, let asset = generatedVideoAsset ?? generatedImageAsset else { return }
+        guard !isWorking, requireAIService(), (videoJobID == nil ? imageReviewComplete : videoReviewComplete), let creationID = currentCreationID, let asset = generatedVideoAsset ?? generatedImageAsset else { return }
         let decision = ReviewDecision(id: UUID(), assetID: asset.id, result: .approved, issueTypes: [], note: nil, createdAt: .now)
         let copyJobID = UUID()
         let job = GenerationJob(id: copyJobID, kind: .copy, creationID: creationID, idempotencyKey: UUID(), model: configuration?.models.text ?? "", status: .processing, outputAssetIDs: [])
@@ -778,7 +810,7 @@ final class AppModel: ObservableObject {
         do {
             try await commit { state in
                 state.reviews.append(decision)
-                if let videoJobID, let index = state.jobs.firstIndex(where: { $0.id == videoJobID }) { state.jobs[index].status = .succeeded }
+                if let reviewJobID = videoJobID ?? imageJobID, let index = state.jobs.firstIndex(where: { $0.id == reviewJobID }) { state.jobs[index].status = .succeeded }
                 state.jobs.append(job)
                 if let index = state.creations.firstIndex(where: { $0.id == creationID }) {
                     state.creations[index].copyJobID = copyJobID
@@ -796,7 +828,7 @@ final class AppModel: ObservableObject {
                 )
             } else {
                 guard let provider, let facts = currentProductSnapshot() else { throw AppError.safe("PRODUCT_FACT_REQUIRED", "请先确认商品关键信息") }
-                draft = try await provider.generateCopy(.init(facts: facts, creativeSummary: "真人手持生活方式，3:4，自然光", prohibitedClaims: ["虚构购买经历", "价格", "疗效", "权威背书", "未经确认的评价"], idempotencyKey: UUID()))
+                draft = try await provider.generateCopy(.init(facts: facts, creativeSummary: "真人手持生活方式，3:4，自然光。版本优化方向：\(revisionNote)", prohibitedClaims: ["虚构购买经历", "价格", "疗效", "权威背书", "未经确认的评价"], idempotencyKey: UUID()))
             }
             copyTitles = draft.titles
             copyBody = draft.body
@@ -839,6 +871,7 @@ final class AppModel: ObservableObject {
 
     func confirmCopy() async {
         guard let creationID = currentCreationID else { return }
+        if isCurrentVersionReadOnly { screen = .saveResult; return }
         do {
             try await commit { state in
                 if let index = state.copyPackages.firstIndex(where: { $0.creationID == creationID }) {
@@ -929,22 +962,31 @@ final class AppModel: ObservableObject {
         _ = await UIApplication.shared.open(url)
     }
 
-    func resume(product: Product) async {
+    func resume(product: Product, creation requestedCreation: Creation? = nil) async {
+        guard !isWorking else { return }
+        startNewProduct()
         currentProductID = product.id
-        currentSnapshotID = product.currentSnapshotID
+        let targetSnapshotID = requestedCreation?.productSnapshotID ?? product.currentSnapshotID
+        currentSnapshotID = targetSnapshotID
         productName = product.name
-        guard let facts = snapshot.productSnapshots.first(where: { $0.id == product.currentSnapshotID }) else { return }
+        sku = product.sku ?? ""
+        guard let facts = snapshot.productSnapshots.first(where: { $0.id == targetSnapshotID }) else { return }
         sourceAssets = facts.sourceAssetIDs.compactMap { id in snapshot.assets.first(where: { $0.id == id }) }
         load(facts: facts)
-        guard let creation = snapshot.creations.filter({ $0.productSnapshotID == facts.id }).max(by: { $0.updatedAt < $1.updatedAt }) else {
+        guard let creation = requestedCreation ?? creations(for: product.id).last else {
             screen = product.status == .factsPending ? .factConfirmation : .product
             return
         }
         currentCreationID = creation.id
+        revisionNote = creation.revisionNote ?? ""
+        if creation.isPreview == true { connectionState = .preview }
+        else if connectionState == .preview { connectionState = .idle }
         imageJobID = creation.imageJobID
         videoJobID = creation.videoJobID
         generatedImageAsset = creation.imageJobID.flatMap { id in snapshot.jobs.first(where: { $0.id == id })?.outputAssetIDs.first }.flatMap { id in snapshot.assets.first(where: { $0.id == id }) }
         generatedVideoAsset = creation.videoJobID.flatMap { id in snapshot.jobs.first(where: { $0.id == id })?.outputAssetIDs.first }.flatMap { id in snapshot.assets.first(where: { $0.id == id }) }
+        selectedImageChecks = Set(imageReviewItems.filter { _ in snapshot.reviews.contains { $0.assetID == generatedImageAsset?.id && $0.result == .approved } })
+        selectedVideoChecks = Set(videoReviewItems.filter { _ in snapshot.reviews.contains { $0.assetID == generatedVideoAsset?.id && $0.result == .approved } })
         if let stored = snapshot.copyPackages.first(where: { $0.creationID == creation.id }) {
             copyTitles = stored.titles; selectedTitleIndex = stored.selectedTitleIndex; copyBody = stored.body; copyTopics = stored.topics
         }
@@ -955,7 +997,9 @@ final class AppModel: ObservableObject {
         case .imageReview: screen = .imageReview
         case .generatingVideo: screen = .videoGeneration; handleSceneBecameActive()
         case .videoReview: screen = .videoReview
-        case .generatingCopy: screen = .videoReview
+        case .generatingCopy:
+            screen = videoJobID == nil ? .imageReview : .videoReview
+            operation = .failed("文案生成未完成，可重试文案生成。")
         case .ready: screen = .copyResult
         case .saved: screen = .saveResult
         case .failed: screen = .history
@@ -989,6 +1033,7 @@ final class AppModel: ObservableObject {
     }
 
     func delete(product: Product) async {
+        guard !isWorking else { return }
         let snapshotIDs = Set(snapshot.productSnapshots.filter { $0.productID == product.id }.map(\.id))
         let creationIDs = snapshot.creations.filter { snapshotIDs.contains($0.productSnapshotID) }.map(\.id)
         do {
@@ -1215,7 +1260,7 @@ final class AppModel: ObservableObject {
     private func imagePrompt(for facts: ProductSnapshot, reviewIssues: [ReviewIssue]) -> String {
         let factSummary = "材质：\(facts.material ?? "不确定")；颜色：\(facts.colors.joined(separator: "、"))；图案：\(facts.visiblePatterns.joined(separator: "、"))；文字：\(facts.visibleText.joined(separator: "、"))；规格：\(facts.specification ?? "不确定")"
         let constraints = (facts.lockedFeatures + reviewIssues.map(\.promptConstraint)).joined(separator: "；")
-        return "真人自然手持商品的日常生活方式摄影，柔和自然光，小红书 3:4 竖图，商品是唯一视觉主体，不过度精修。商品事实：\(factSummary)。禁止改变：\(constraints)；不增加配件、赠品、错误文字或虚构效果。"
+        return "本版本优化方向：\(revisionNote)。真人自然手持商品的日常生活方式摄影，柔和自然光，小红书 3:4 竖图，商品是唯一视觉主体，不过度精修。商品事实：\(factSummary)。禁止改变：\(constraints)；不增加配件、赠品、错误文字或虚构效果。"
     }
 
     private func videoPrompt() -> String {
@@ -1257,6 +1302,186 @@ final class AppModel: ObservableObject {
         return !normalized.isEmpty && normalized != "待确认" && normalized != "以实物图为准"
     }
 
+}
+
+extension AppModel {
+    var isWorking: Bool {
+        if case .working = operation { return true }
+        return false
+    }
+
+    var activeProduct: Product? { snapshot.products.first { $0.id == currentProductID } }
+    var activeCreation: Creation? { snapshot.creations.first { $0.id == currentCreationID } }
+    var isCurrentVersionReadOnly: Bool {
+        guard let creation = activeCreation, let productID = currentProductID else { return false }
+        return creation.tracking != nil || creations(for: productID).last?.id != creation.id
+    }
+
+    func selectTab(_ tab: WorkspaceTab) {
+        guard !isWorking else { return }
+        if tab == .publish {
+            screen = .history
+            isQuickPublishPresented = true
+        } else {
+            selectedTab = tab
+            screen = tab == .settings ? .setup : .history
+            isQuickPublishPresented = false
+        }
+    }
+
+    func dismissQuickPublish() {
+        guard !isWorking else { return }
+        screen = selectedTab == .settings ? .setup : .history
+        isQuickPublishPresented = false
+    }
+
+    func showProduct(_ product: Product) {
+        guard !isWorking else { return }
+        screen = .productDetail(product.id)
+    }
+
+    func creations(for productID: MusesID) -> [Creation] {
+        let ids = Set(snapshot.productSnapshots.filter { $0.productID == productID }.map(\.id))
+        return snapshot.creations.filter { ids.contains($0.productSnapshotID) }.sorted { $0.createdAt < $1.createdAt }
+    }
+
+    func versionLabel(_ creation: Creation) -> String {
+        let productID = snapshot.productSnapshots.first { $0.id == creation.productSnapshotID }?.productID
+        let versions = productID.map { creations(for: $0) } ?? []
+        return "V\(creation.versionNumber ?? ((versions.firstIndex { $0.id == creation.id } ?? 0) + 1))"
+    }
+
+    func requireAIService() -> Bool {
+        if connectionState == .preview { return true }
+        guard !isPlaceholderConfiguration, hasStoredCredential, provider != nil else {
+            alert = AppAlert(title: "生成前需连接 AI 服务", message: "商品录入和数据跟进可直接使用。请到「个人设置」配置 AI 服务后，再回到此商品继续生成。")
+            return false
+        }
+        return true
+    }
+
+    @discardableResult
+    func saveProductDraft(navigate: Bool = true) async -> Bool {
+        guard !isWorking, let productID = currentProductID else { return false }
+        guard !sku.trimmed.isEmpty, !productName.trimmed.isEmpty, !sellingPoint.trimmed.isEmpty else {
+            alert = AppAlert(title: "补全商品资料", message: "请填写 SKU、商品名称和真实卖点，图片可稍后补充。")
+            return false
+        }
+        guard !snapshot.products.contains(where: { $0.id != productID && $0.sku?.lowercased() == sku.trimmed.lowercased() }) else {
+            alert = AppAlert(title: "SKU 已存在", message: "请打开已有商品，或使用不同的 SKU 编号。")
+            return false
+        }
+        operation = .working("正在保存商品")
+        defer { operation = .idle }
+        let snapshotID = UUID()
+        let facts = makeProductSnapshot(id: snapshotID, productID: productID, confirmed: false)
+        let product = Product(id: productID, name: productName.trimmed, createdAt: activeProduct?.createdAt ?? .now, currentSnapshotID: snapshotID, status: .draft, sku: sku.trimmed)
+        do {
+            try await commit { state in
+                state.products.removeAll { $0.id == productID }
+                state.products.append(product)
+                state.productSnapshots.append(facts)
+                state.assets.append(contentsOf: sourceAssets.filter { asset in !state.assets.contains { $0.id == asset.id } })
+            }
+            currentSnapshotID = snapshotID
+            if navigate { screen = .productDetail(productID) }
+            return true
+        } catch { alert = AppAlert.from(error); return false }
+    }
+
+    func importSKUFile(_ url: URL) async {
+        guard !isWorking else { return }
+        operation = .working("正在导入 SKU")
+        defer { operation = .idle }
+        let accessible = url.startAccessingSecurityScopedResource()
+        defer { if accessible { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size <= 2_097_152 else { throw AppError.safe("IMPORT_TOO_LARGE", "文件不能超过 2 MB。") }
+            let rows = try SKUImport.parse(Data(contentsOf: url), fileExtension: url.pathExtension)
+            let existing = Set(snapshot.products.compactMap { $0.sku?.lowercased() })
+            guard let duplicate = rows.first(where: { existing.contains($0.sku.lowercased()) }) else {
+                try await commit { state in
+                    for row in rows {
+                        let productID = UUID(), snapshotID = UUID()
+                        state.products.append(Product(id: productID, name: row.name, createdAt: .now, currentSnapshotID: snapshotID, status: .draft, sku: row.sku))
+                        state.productSnapshots.append(ProductSnapshot(id: snapshotID, productID: productID, sourceAssetIDs: [], colors: [], visiblePatterns: [], visibleText: [], verifiedSellingPoints: [row.sellingPoint], lockedFeatures: [], uncertainFields: [], rightsConfirmed: false))
+                    }
+                }
+                alert = AppAlert(title: "已导入 \(rows.count) 个 SKU", message: "打开商品后补充真实商品图，即可开始生成图文版本。")
+                return
+            }
+            throw AppError.safe("SKU_DUPLICATE", "SKU「\(duplicate.sku)」已存在。本次未导入，请修改文件后重试。")
+        } catch { alert = AppAlert.from(error) }
+    }
+
+    func prepareNextVersion(for product: Product) async {
+        guard !isWorking else { return }
+        let versions = creations(for: product.id)
+        guard versions.allSatisfy({ [.ready, .saved].contains($0.status) }) else {
+            if let unfinished = versions.last(where: { ![.ready, .saved].contains($0.status) }) {
+                await resume(product: product, creation: unfinished)
+            }
+            return
+        }
+        let desiredMode = connectionState
+        await resume(product: product)
+        connectionState = desiredMode
+        currentCreationID = nil
+        imageJobID = nil
+        videoJobID = nil
+        generatedImageAsset = nil
+        generatedVideoAsset = nil
+        copyTitles = []; copyBody = ""; copyTopics = []; exportRecord = nil
+        revisionNote = ""
+        selectedImageChecks = []; selectedVideoChecks = []
+        screen = currentProductSnapshot()?.confirmedAt == nil ? .product : .factConfirmation
+    }
+
+    func saveTracking(creationID: MusesID, postURL: String, publishedAt: Date, metrics: PostMetrics) async throws {
+        guard !isWorking else { throw AppError.safe("BUSY", "请等待当前操作完成。") }
+        try metrics.validate()
+        guard let url = URL(string: postURL.trimmed), let host = url.host?.lowercased(),
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
+              host == "xiaohongshu.com" || host.hasSuffix(".xiaohongshu.com") || host == "xhslink.com" || host.hasSuffix(".xhslink.com"),
+              publishedAt <= .now else {
+            throw AppError.safe("POST_INVALID", "请填写有效的小红书帖子链接，发布时间不能在未来。")
+        }
+        guard let creation = snapshot.creations.first(where: { $0.id == creationID }), [.ready, .saved].contains(creation.status), creation.isPreview != true else {
+            throw AppError.safe("VERSION_NOT_READY", "真实图文版本完成后，才可登记发布数据。")
+        }
+        operation = .working("正在保存跟进数据")
+        defer { operation = .idle }
+        try await commit { state in
+            guard let index = state.creations.firstIndex(where: { $0.id == creationID }) else { return }
+            var tracking = state.creations[index].tracking ?? PostTracking(postURL: postURL.trimmed, publishedAt: publishedAt, samples: [])
+            tracking.postURL = postURL.trimmed
+            tracking.publishedAt = publishedAt
+            tracking.samples.append(metrics)
+            state.creations[index].tracking = tracking
+        }
+    }
+
+    func saveStaticImage() async {
+        guard !isWorking, let image = generatedImageAsset, image.kind == .generatedImage,
+              let assetStore, let creationID = currentCreationID else { return }
+        operation = .working("正在保存图片")
+        defer { operation = .idle }
+        do {
+            let result = try await photoLibrary.saveImage(at: assetStore.url(for: image))
+            var record = exportRecord ?? ExportRecord(id: UUID(), creationID: creationID, livePhotoStatus: .notRequested, imageStatus: .notRequested, videoStatus: .notRequested, copyStatus: .notRequested, createdAt: .now, updatedAt: .now)
+            record.imageStatus = .saved
+            record.imageLocalIdentifier = result.localIdentifier
+            record.updatedAt = .now
+            try await commit { state in
+                state.exportRecords.removeAll { $0.creationID == creationID }
+                state.exportRecords.append(record)
+                if let index = state.creations.firstIndex(where: { $0.id == creationID }) { state.creations[index].status = .saved }
+                if let index = state.products.firstIndex(where: { $0.id == currentProductID }) { state.products[index].status = .completed }
+            }
+            exportRecord = record
+        } catch { alert = AppAlert.from(error) }
+    }
 }
 
 struct AppAlert: Identifiable, Equatable {

@@ -5,13 +5,14 @@ import UniformTypeIdentifiers
 struct ProductInputView: View {
     @EnvironmentObject private var app: AppModel
     @State private var photoItems: [PhotosPickerItem] = []
+    @State private var showImageImporter = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                PageHeader(title: "上传商品素材", subtitle: "清晰展示商品全貌与细节，更有助于 AI 识别", step: "1 / 4  商品素材", backAction: { app.screen = .history })
+                PageHeader(title: "录入 SKU", subtitle: "先保存商品资料，也可以补充图片后开始创作", step: "1 / 4  商品素材", backAction: { app.screen = .history })
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 16) {
@@ -67,11 +68,18 @@ struct ProductInputView: View {
 
                 SurfaceCard {
                     VStack(spacing: 18) {
+                        MusesTextField(title: "SKU 编号", icon: "number", placeholder: "例如：CUP-001", text: $app.sku)
+                        Divider()
                         MusesTextField(title: "商品名称", icon: "tag", placeholder: "例如：透明波点玻璃杯", text: $app.productName)
                         Divider()
                         MusesTextField(title: "一句话真实卖点", icon: "sparkles", placeholder: "只写可核实的真实信息", text: $app.sellingPoint, axis: .vertical)
                     }
                 }
+
+                SecondaryButton(title: "从文件添加商品图", icon: "folder") { showImageImporter = true }
+                    .disabled(app.sourceAssets.count >= 6 || isWorking)
+                SecondaryButton(title: "保存 SKU 资料", icon: "square.and.arrow.down") { Task { await app.saveProductDraft() } }
+                    .disabled(isWorking || app.sku.trimmed.isEmpty || app.productName.trimmed.isEmpty || app.sellingPoint.trimmed.isEmpty)
 
                 if app.sourceAssets.count < 3 {
                     InfoBanner(text: app.connectionState == .preview ? "建议上传至少 3 个角度；预览模式选择 1 张即可继续。" : "还需上传 \(3 - app.sourceAssets.count) 张，真实生成要求至少 3 个角度。", kind: .warning)
@@ -86,8 +94,8 @@ struct ProductInputView: View {
                     title: "AI 识别商品",
                     icon: "sparkles",
                     isLoading: isWorking,
-                    disabled: app.productName.trimmed.isEmpty || app.sellingPoint.trimmed.isEmpty || app.sourceAssets.count < (app.connectionState == .preview ? 1 : 3)
-                ) { Task { await app.recognizeProduct() } }
+                    disabled: app.sku.trimmed.isEmpty || app.productName.trimmed.isEmpty || app.sellingPoint.trimmed.isEmpty || app.sourceAssets.count < (app.connectionState == .preview ? 1 : 3)
+                ) { Task { if await app.saveProductDraft(navigate: false) { await app.recognizeProduct() } } }
                 Text("识别后仍需要你逐项确认")
                     .font(.caption)
                     .foregroundStyle(MusesTheme.secondaryInk)
@@ -97,6 +105,20 @@ struct ProductInputView: View {
             .padding(20)
         }
         .musesPage()
+        .fileImporter(isPresented: $showImageImporter, allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls):
+                Task {
+                    for url in urls {
+                        let access = url.startAccessingSecurityScopedResource()
+                        defer { if access { url.stopAccessingSecurityScopedResource() } }
+                        do { try await app.addPhotoFile(url) }
+                        catch { app.alert = AppAlert.from(error) }
+                    }
+                }
+            case .failure(let error): app.alert = AppAlert.from(error)
+            }
+        }
         .onChange(of: photoItems) { _, items in
             Task {
                 for item in items {
