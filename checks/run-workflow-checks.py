@@ -26,7 +26,9 @@ with tempfile.TemporaryDirectory(prefix='muses-workflow-') as temporary:
                       'CFBundleVersion': '1', 'CFBundleShortVersionString': '1.0',
                       'LSRequiresIPhoneOS': True, 'UILaunchScreen': {}}, file)
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
-    sources = sorted(str(path) for path in (root / 'Muses').rglob('*.swift') if path.name != 'MusesApp.swift')
+    # The legacy JSON workflow does not use Realm yet; its checks link only Alamofire.
+    excluded = {'MusesApp.swift', 'RealmModels.swift', 'RealmDatabase.swift'}
+    sources = sorted(str(path) for path in (root / 'Muses').rglob('*.swift') if path.name not in excluded)
     subprocess.run(['xcrun', '--sdk', 'iphonesimulator', 'swiftc', '-swift-version', '6', '-parse-as-library',
                     '-target', 'arm64-apple-ios17.0-simulator', '-sdk', sdk,
                     '-module-cache-path', temporary + '/cache', '-I', str(products), *sources,

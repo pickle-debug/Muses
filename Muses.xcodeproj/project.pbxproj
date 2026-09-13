@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		779162083056C7000004BBCD /* CombineMoya in Frameworks */ = {isa = PBXBuildFile; productRef = 779162073056C7000004BBCD /* CombineMoya */; };
+		7791620A3056C7000004BBCD /* Moya in Frameworks */ = {isa = PBXBuildFile; productRef = 779162093056C7000004BBCD /* Moya */; };
+		77E0DA193056E0B30045EAFB /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 77E0DA183056E0B30045EAFB /* RealmSwift */; };
 		B20000000000000000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000003 /* Alamofire */; };
 /* End PBXBuildFile section */
 
@@ -35,6 +38,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				77E0DA193056E0B30045EAFB /* RealmSwift in Frameworks */,
+				779162083056C7000004BBCD /* CombineMoya in Frameworks */,
+				7791620A3056C7000004BBCD /* Moya in Frameworks */,
 				B20000000000000000000001 /* Alamofire in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -81,6 +87,9 @@
 			name = Muses;
 			packageProductDependencies = (
 				B20000000000000000000003 /* Alamofire */,
+				779162073056C7000004BBCD /* CombineMoya */,
+				779162093056C7000004BBCD /* Moya */,
+				77E0DA183056E0B30045EAFB /* RealmSwift */,
 			);
 			productName = Muses;
 			productReference = A10000000000000000000001 /* Muses.app */;
@@ -114,6 +123,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B20000000000000000000002 /* XCRemoteSwiftPackageReference "Alamofire" */,
+				779162063056C7000004BBCD /* XCRemoteSwiftPackageReference "Moya" */,
+				77E0DA173056E0B30045EAFB /* XCRemoteSwiftPackageReference "realm-swift" */,
 			);
 			productRefGroup = A10000000000000000000005 /* Products */;
 			projectDirPath = "";
@@ -256,6 +267,22 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		779162063056C7000004BBCD /* XCRemoteSwiftPackageReference "Moya" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Moya/Moya.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 15.0.3;
+			};
+		};
+		77E0DA173056E0B30045EAFB /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift.git";
+			requirement = {
+				branch = community;
+				kind = branch;
+			};
+		};
 		B20000000000000000000002 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/Alamofire/Alamofire.git";
@@ -267,6 +294,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		779162073056C7000004BBCD /* CombineMoya */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 779162063056C7000004BBCD /* XCRemoteSwiftPackageReference "Moya" */;
+			productName = CombineMoya;
+		};
+		779162093056C7000004BBCD /* Moya */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 779162063056C7000004BBCD /* XCRemoteSwiftPackageReference "Moya" */;
+			productName = Moya;
+		};
+		77E0DA183056E0B30045EAFB /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 77E0DA173056E0B30045EAFB /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
+		};
 		B20000000000000000000003 /* Alamofire */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B20000000000000000000002 /* XCRemoteSwiftPackageReference "Alamofire" */;

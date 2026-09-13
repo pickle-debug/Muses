@@ -13,8 +13,8 @@ struct SalesFollowUpView: View {
                 WorkspaceHeading(title: "销售跟进", subtitle: "每一篇帖子，都对应一个商品内容版本。")
                 InfoBanner(text: "手动登记小红书帖子和累计数据。转化率 = 订单数 ÷ 浏览量；订单与成交额由你核实，本页尚未自动同步平台数据。", kind: .neutral)
                 if versions.isEmpty {
-                    ContentUnavailableView("还没有可跟进的图文", systemImage: "chart.line.uptrend.xyaxis", description: Text("完成真实图文版本后，在这里登记帖子链接并持续更新数据。"))
-                    PrimaryButton(title: "去快速发布", icon: "plus") { app.selectTab(.publish) }
+                    ContentUnavailableView("暂无跟进记录", systemImage: "chart.line.uptrend.xyaxis")
+                    PrimaryButton(title: "查看我的商品", icon: "shippingbox") { app.selectTab(.products) }
                 }
                 ForEach(versions) { creation in
                     SurfaceCard {

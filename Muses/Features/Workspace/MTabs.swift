@@ -52,7 +52,6 @@ final class MTabbarController: UITabBarController, UITabBarControllerDelegate {
         // UIKit keeps its own native selection gesture; the center slot is action-only.
         selectedIndex = MTab.allCases.firstIndex(of: app.selectedTab) ?? 0
 
-        // 切换特效版：将下一行改为 CometPublishButton(app: app)
         let host = UIHostingController(rootView: PublishButton(app: app))
         host.safeAreaRegions = []
         host.view.backgroundColor = .clear
@@ -103,19 +102,16 @@ private struct PublishButton: View {
     var body: some View {
         Button { app.selectTab(.publish) } label: {
             ZStack {
-                if isPressing {
-                    Circle().stroke(MusesTheme.coral.opacity(0.4), lineWidth: 7)
-                        .frame(width: 78, height: 78).scaleEffect(1.16).opacity(0.35)
-                        .animation(.easeOut(duration: 0.9).repeatForever(autoreverses: false), value: isPressing)
-                }
-                Image(systemName: isPressing ? "waveform" : "plus")
-                    .font(.system(size: isPressing ? 25 : 29, weight: .medium))
+                Image(systemName: "plus")
+                    .font(.system(size: 29, weight: .medium))
                     .foregroundStyle(.white).frame(width: 60, height: 60).contentShape(Circle())
                     .glassEffect(.regular.tint(MusesTheme.coral).interactive(), in: Circle())
             }
+            .scaleEffect(isPressing ? 1.12 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.58), value: isPressing)
         }
         .buttonStyle(.plain)
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.01).onChanged { _ in isPressing = true }.onEnded { _ in isPressing = false })
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in isPressing = true }.onEnded { _ in isPressing = false })
         .accessibilityLabel(MTab.publish.rawValue)
         .accessibilityIdentifier("workspace.tab.publish")
         .accessibilityAddTraits(app.isQuickPublishPresented ? .isSelected : [])

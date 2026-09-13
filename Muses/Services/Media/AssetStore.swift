@@ -110,7 +110,16 @@ actor AssetStore {
         guard byteCount > 0 else { throw AppError.safe("ASSET_INVALID", "媒体文件为空") }
         let hash = try sha256(at: sourceURL)
         let preferredExtension = preferredFileName.map { URL(fileURLWithPath: $0).pathExtension } ?? ""
-        let ext = preferredExtension.isEmpty ? sourceURL.pathExtension : preferredExtension
+        // Derive the extension from the decoded image container; picker-provided
+        // content types and temporary filenames can disagree with the actual bytes.
+        let detectedExtension: String = {
+            guard kind == .sourceImage,
+                  let imageSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+                  let type = CGImageSourceGetType(imageSource),
+                  let value = UTType(type as String)?.preferredFilenameExtension else { return "" }
+            return value
+        }()
+        let ext = detectedExtension.isEmpty ? (preferredExtension.isEmpty ? sourceURL.pathExtension : preferredExtension) : detectedExtension
         let directory = rootURL.appending(path: relativeDirectory, directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let fileName = "\(hash).\(ext.isEmpty ? "bin" : ext.lowercased())"

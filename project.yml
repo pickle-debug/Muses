@@ -17,6 +17,9 @@ packages:
   Alamofire:
     url: https://github.com/Alamofire/Alamofire.git
     from: 5.10.2
+  RealmSwift:
+    url: https://github.com/realm/realm-swift.git
+    branch: community
 fileGroups:
   - docs
   - README.md
@@ -33,6 +36,8 @@ targets:
       - path: Muses/Resources/provider.config.json
     dependencies:
       - package: Alamofire
+      - package: RealmSwift
+        product: RealmSwift
     settings:
       base:
         TARGETED_DEVICE_FAMILY: 1

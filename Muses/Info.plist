@@ -25,7 +25,7 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>将审核通过的静态图、MP4 和 Live Photo 保存到系统相册。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>选择 3 至 6 张你有权使用的真实商品图，用于建立商品事实和生成内容。</string>
+	<string>选择至多 9 张你有权使用的真实商品图，用于编辑商品资料、建立商品事实和生成内容。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

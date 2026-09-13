@@ -44,7 +44,10 @@ final class TabBarUITests: XCTestCase {
             // Tap the cap above the capsule, not the part inside the bar.
             XCTAssertLessThan(publish.frame.minY + 6, tab.frame.minY - 6)
             publish.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
-            XCTAssertTrue(app.buttons["手动录入 SKU"].waitForExistence(timeout: 3))
+            XCTAssertTrue(app.buttons["workspace.publish.photos"].waitForExistence(timeout: 3))
+            XCTAssertTrue(app.buttons["workspace.publish.photos"].label.contains("从相册选择"))
+            XCTAssertTrue(app.buttons["workspace.publish.smart"].isHittable)
+            XCTAssertTrue(app.buttons["workspace.publish.camera"].isHittable)
             XCTAssertFalse(app.tabBars.firstMatch.isHittable)
             app.buttons["workspace.publish.close"].tap()
             XCTAssertTrue(tab.waitForExistence(timeout: 3))
@@ -55,5 +58,83 @@ final class TabBarUITests: XCTestCase {
         attachment.name = "Liquid Glass tabbar — raised publish button"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    @MainActor
+    func testSmartRecognitionSheetInput() {
+        let app = XCUIApplication(bundleIdentifier: "com.ordoeden.muses")
+        app.launch()
+        let publish = app.buttons["workspace.tab.publish"]
+        XCTAssertTrue(publish.waitForExistence(timeout: 10))
+        let products = app.buttons["workspace.tab.我的商品"]
+        products.tap()
+        publish.tap()
+        let smart = app.buttons["workspace.publish.smart"]
+        XCTAssertTrue(smart.waitForExistence(timeout: 3))
+        smart.tap()
+
+        let input = app.textViews["workspace.publish.smart.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 3))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["workspace.publish.photos"].exists, "输入 sheet 打开后应收起悬浮菜单")
+        let recognize = app.buttons["workspace.publish.smart.recognize"]
+        XCTAssertFalse(recognize.isEnabled, "空输入时应禁用识别按钮")
+        input.tap()
+        input.typeText("https://example.com/product")
+        XCTAssertTrue(recognize.isEnabled)
+
+        app.buttons["workspace.publish.smart.close"].tap()
+        XCTAssertTrue(products.waitForExistence(timeout: 3))
+        XCTAssertTrue(products.isSelected)
+        publish.tap()
+        XCTAssertTrue(app.buttons["workspace.publish.smart"].waitForExistence(timeout: 3))
+        app.buttons["workspace.publish.close"].tap()
+    }
+
+    @MainActor
+    func testSKUEntryPhotoRowAndNameValidation() {
+        let app = XCUIApplication(bundleIdentifier: "com.ordoeden.muses")
+        app.launch()
+        let products = app.buttons["workspace.tab.我的商品"]
+        XCTAssertTrue(products.waitForExistence(timeout: 10))
+        products.tap()
+        app.buttons["新建"].tap()
+        let firstSlot = app.buttons["sku.photo.add.1"]
+        XCTAssertTrue(firstSlot.waitForExistence(timeout: 3))
+        XCTAssertEqual(firstSlot.frame.width, firstSlot.frame.height, accuracy: 1)
+        for index in 2...9 {
+            XCTAssertFalse(app.buttons["sku.photo.add.\(index)"].exists, "只显示一个添加框")
+        }
+        let photoRow = app.scrollViews["sku.photos.row"]
+        XCTAssertTrue(photoRow.exists)
+        XCTAssertEqual(app.scrollViews.count, 1, "只有图片区域可以横向滚动")
+        XCTAssertFalse(app.buttons["sku.photos.files"].exists)
+        XCTAssertEqual(app.textFields.count, 1, "仅输入商品名称")
+        XCTAssertFalse(app.buttons["sku.save"].isEnabled)
+        XCTAssertFalse(app.buttons["sku.recognize"].exists)
+
+        let field = app.textFields["sku.input.name"]
+        XCTAssertTrue(field.isHittable)
+        XCTAssertGreaterThanOrEqual(field.frame.minY, photoRow.frame.maxY)
+        let fieldY = field.frame.minY
+        photoRow.swipeUp()
+        XCTAssertEqual(field.frame.minY, fieldY, accuracy: 1, "页面不能纵向滚动")
+        field.tap()
+        field.typeText("Glass cup")
+        app.buttons["sku.input.done"].tap()
+        XCTAssertTrue(app.buttons["sku.save"].isEnabled, "只填商品名称即可保存")
+        XCTAssertFalse(app.buttons["sku.recognize"].exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "SKU entry — photo row and name"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.buttons["sku.save"].tap()
+        let savedName = app.staticTexts["sku.detail.name"]
+        XCTAssertTrue(savedName.waitForExistence(timeout: 3))
+        XCTAssertEqual(savedName.label, "Glass cup")
+        app.buttons["sku.detail.edit"].tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        XCTAssertEqual(field.value as? String, "Glass cup")
+        app.buttons["sku.back"].tap()
     }
 }

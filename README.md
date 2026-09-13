@@ -1,50 +1,24 @@
 # Muses
 
-原生 SwiftUI、iOS 17+ 的端到端首版实现。实现范围依据：
+原生 SwiftUI iOS App。当前 SKU 流程为：商品列表 → 创建商品 → 保存 → 查看详情，也可从详情返回编辑。
 
-- `docs/Muses-首版规格与验收.md`
-- `docs/Muses-技术架构与API契约.md`
-- `output/Muses-concept-ui/*.png`
+创建页只填写商品名称，图片按横向一排显示，最多 9 张；SKU 编号自动生成。详情页显示名称与图片。事实确认、生成、审核和结果页面及其自动任务流程已移除。其他工作台入口与个人设置沿用现有实现。
 
-## 已实现链路
+## 本地存储
 
-`临时 Key → 商品图 → AI 商品事实 → 用户确认 → 生成图片 → 图片审核 → 异步 AI 动态 → 动态审核 → 小红书文案 → Live Photo / MP4 / 静态图 → 本地历史`
+SKU 仍由 `AppModel` 调用 `SnapshotStore`，写入 App 沙盒的 `Application Support/Muses/snapshot-v2.json`。图片由 `AssetStore` 独立保存，JSON 记录图片引用。
 
-代码还覆盖逐字段商品事实确认、任务幂等键、不可变提示词重放、远端视频任务 ID 落盘、App 前后台轮询恢复、图片结果 URL 落盘与仅重试下载、下载失败与 Live Photo 失败降级、审核失败标签带入下一版本、Key 脱敏、本地项目删除。
+`RealmDatabase.swift` 和 `RealmModels.swift` 已存在，但尚未接入 SKU 读写，也没有执行 JSON 到 Realm 的迁移。旧 JSON 数据结构保留，编辑商品不会移除历史字段。
 
-## 打开工程
+## Xcode 验证
 
-仓库根目录已经包含 `Muses.xcodeproj`，可直接用 Xcode 16+ 打开。工程导航器中的 `Muses` 源码与 `docs` 文档位于同一层级，文档不属于 App target，未来可直接移除。`project.yml` 同时保留为可审阅、可重建的工程清单。根据全局 Apple 项目约定，Codex 没有执行工程生成、编译、依赖安装或模拟器/真机运行。
+用 Xcode 打开 `Muses.xcodeproj`。Codex 只进行静态检查，不自动生成工程、安装依赖、编译或运行模拟器。
 
-构建前请确认 `PRODUCT_BUNDLE_IDENTIFIER` 与签名 Team 符合你的开发者账号配置。
+- 无图时仅显示一个加号；选择 N 张后显示 N+1 个框，满 9 张隐藏加号。
+- 点击加号继续从相册添加；取消不改动草稿；删除后可再次添加。
+- 空名称不能保存；只填名称即可保存并进入详情。
+- 详情可左右查看全部图片，编辑后名称、图片顺序及自动 SKU 保持正确。
+- 重启后检查商品仍可查看，删除一个商品不影响其他商品。
+- 检查小屏、键盘、大字体及 VoiceOver 下的创建与详情布局。
 
-## 真实供应商配置
-
-`Muses/Resources/provider.config.json` 已配置为 `https://musesapi.ordoeden.com/v1`，网络请求由 SPM 引入的 Alamofire 执行。不要把 API Key 写入该文件。上线前仍需按服务端实际能力校准：
-
-- HTTPS `baseUrl` 和 `allowedHosts`
-- 文本、图片、视频模型名
-- 多参考图 multipart 字段
-- 视频创建/查询路径、状态映射和结果路径
-- 文本/图片/视频实际响应 JSONPath
-- 结果 URL 是否为匿名签名地址；若下载需要鉴权，需在 Provider adapter 中配置专用请求
-- 供应商是否真正支持 `Idempotency-Key`；不支持时不能把超时重试视为无重复计费风险
-
-有效 API Key 会通过 `Authorization: Bearer` 发送；“测试连接”调用 `/models` 并确认文本、图片、视频模型均对当前 Key 可用，后续分别调用配置中的 OpenAI 风格接口。预览模式仅在配置重新改为占位值时出现，不调用网络，也不会把示例媒体写入相册。
-
-## Xcode / 真机手工验收
-
-- 用有效临时 Key 测试连接，确认无效 Key/额度不足不显示完整 Key。
-- 用至少两种不同 SKU 各选 3–6 张图跑通完整链路。
-- 图片/动态拒绝后确认返修只创建对应新任务；动态返修不重做已通过图片。
-- 检查返修任务与同幂等键重试都重放任务绑定的同一份 PromptVersion。
-- 在提交窗口和动态生成中分别强制终止并重启 App，确认残留 `submitting` 被归一化为 `submissionUnknown`，已有 `providerTaskID` 时只查询原任务。
-- 确认生成图显示完整 3:4，无不必要裁切。
-- 用错误画幅图片、有声/非 720p/超出 3–5 秒视频验证媒体规格门会拒绝进入审核。
-- 在 Photos 验证 JPG、MP4，并长按播放有实况标志的 Live Photo。
-- 拒绝相册权限，确认生成结果仍保留并给出可理解提示。
-- 制造 Live Photo 配对失败，确认 MP4、静态图与文案仍可保存。
-- 测试小红书已安装/未安装两种打开结果。
-- 检查小屏 iPhone、Dynamic Type、VoiceOver 与“减少动态效果”。
-
-真实 API、编译、签名、真机 Photos 以及小红书发布均尚未由 Codex 执行或验证。
+`checks/WorkflowChecks.swift` 和 `checks/TabBarUITests.swift` 已随 SKU 流程调整；本轮未运行。

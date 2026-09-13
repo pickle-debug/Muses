@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-// Run in an isolated simulator app; never calls a provider or writes to Photos.
+// Run only in an isolated Xcode validation app; writes local SKU data.
 @main
 struct WorkflowCheckApp: App {
     var body: some Scene {
@@ -13,87 +13,62 @@ struct WorkflowCheckApp: App {
         let app = AppModel()
         while app.isLoadingLocalState { try? await Task.sleep(for: .milliseconds(20)) }
         assert(app.screen == .history && app.selectedTab == .products)
-        for tab in WorkspaceTab.allCases {
-            app.selectTab(tab)
-            assert((tab == .publish ? app.isQuickPublishPresented : app.selectedTab == tab) && app.screen == (tab == .settings ? .setup : .history))
-        }
         app.selectTab(.settings)
         app.selectTab(.publish)
-        assert(app.selectedTab == .settings && app.isQuickPublishPresented)
+        assert(app.isQuickPublishPresented && app.screen == .setup)
         app.dismissQuickPublish()
-        assert(app.selectedTab == .settings && app.screen == .setup && !app.isQuickPublishPresented)
-        app.selectTab(.publish)
-        app.alert = nil
+        assert(!app.isQuickPublishPresented && app.selectedTab == .settings)
+        app.selectTab(.products)
         app.startNewProduct()
-        app.sku = "CHECK-\(UUID().uuidString)"; app.productName = "测试玻璃杯"; app.sellingPoint = "杯身刻度清晰"
-        assert(!app.hasStoredCredential)
+        assert(app.screen == .sku)
+        app.productName = "   "
+        let emptyNameSaved = await app.saveProductDraft()
+        assert(!emptyNameSaved && app.snapshot.products.isEmpty && app.sku.isEmpty)
+        app.alert = nil
+        app.productName = "测试玻璃杯"
         let saved = await app.saveProductDraft()
         assert(saved && app.snapshot.products.count == 1)
-        let productID = app.snapshot.products[0].id
-        app.enterPreviewMode()
-        await app.resume(product: app.snapshot.products[0])
+        let product = app.snapshot.products[0]
+        assert(product.sku == "SKU-\(product.id.uuidString)")
+        assert(app.screen == .skuDetail(product.id))
+        await app.resume(product: product)
+        assert(app.screen == .sku && app.productName == product.name)
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 160))
-        let image = renderer.pngData { context in
-            UIColor.orange.setFill(); context.fill(CGRect(x: 0, y: 0, width: 120, height: 160))
+        for index in 0..<AppModel.maximumSourcePhotoCount {
+            let photo = renderer.pngData { context in
+                UIColor(hue: CGFloat(index) / 10, saturation: 1, brightness: 1, alpha: 1).setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 120, height: 160))
+            }
+            await app.addPhoto(data: photo, suggestedExtension: "png")
         }
-        await app.addPhoto(data: image, suggestedExtension: "png")
-        assert(app.sourceAssets.count == 1 && app.sourceAssets[0].relativePath.hasSuffix(".png"))
-        await app.recognizeProduct()
-        assert(app.screen == .factConfirmation)
-        app.colorsText = "透明"; app.lockedFeaturesText = "杯身轮廓、刻度"
-        for field in FactField.allCases {
-            app.setFactStatus([.sellingPoint, .lockedFeatures, .colors].contains(field) ? .confirmed : .notApplicable, for: field)
+        assert(app.sourceAssets.count == 9)
+        let overflowPhoto = renderer.pngData { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 120, height: 160))
         }
-        app.rightsConfirmed = true
-        assert(app.canConfirmFacts)
-        await app.confirmFactsAndGenerate()
-        await app.confirmFactsAndGenerate() // double taps must not create a second version
-        while app.isWorking { try? await Task.sleep(for: .milliseconds(30)) }
-        assert(app.snapshot.creations.count == 1 && app.screen == .imageReview)
-        app.selectedImageChecks = Set(app.imageReviewItems)
-        await app.approveImageAndGenerateCopy()
-        assert(app.screen == .copyResult && app.snapshot.creations[0].videoJobID == nil)
-        app.copyBody = "保留的第一版文案"
-        await app.confirmCopy()
-        let v1 = app.snapshot.creations[0]
-        await app.prepareNextVersion(for: app.snapshot.products[0])
-        assert(app.screen == .factConfirmation)
-        app.revisionNote = "突出刻度"
-        await app.confirmFactsAndGenerate()
-        while app.isWorking { try? await Task.sleep(for: .milliseconds(30)) }
-        assert(app.snapshot.creations.count == 2)
-        let v2 = app.snapshot.creations[1]
-        assert(v1.productSnapshotID != v2.productSnapshotID && v2.versionNumber == 2)
-        assert(app.snapshot.productSnapshots.contains { $0.id == v1.productSnapshotID })
-        assert(app.snapshot.copyPackages.first { $0.creationID == v1.id }?.body == "保留的第一版文案")
-        app.selectedImageChecks = Set(app.imageReviewItems)
-        await app.approveImageAndGenerateCopy()
-        await app.resume(product: app.snapshot.products[0], creation: v1)
-        assert(app.copyBody == "保留的第一版文案" && app.activeCreation?.id == v1.id)
-        assert(app.isCurrentVersionReadOnly)
-        app.copyBody = "不得覆盖旧版"
-        await app.confirmCopy()
-        assert(app.snapshot.copyPackages.first { $0.creationID == v1.id }?.body == "保留的第一版文案")
-        // Simulate a completed real version for local metrics validation (no generated output claim).
-        app.snapshot.creations[0].isPreview = false
-        let metrics = PostMetrics(views: 1000, likes: 20, saves: 5, comments: 2, inquiries: 10, orders: 3, revenue: 99.9, note: "人工确认订单")
-        do {
-            try await app.saveTracking(creationID: v1.id, postURL: "https://www.xiaohongshu.com/explore/check", publishedAt: .now, metrics: metrics)
-            try await app.saveTracking(creationID: v1.id, postURL: "https://www.xiaohongshu.com/explore/check", publishedAt: .now, metrics: metrics)
-            assert(app.snapshot.creations[0].tracking?.samples.count == 2)
-            assert(app.snapshot.creations[1].tracking == nil)
-            let reloaded = AppModel()
-            while reloaded.isLoadingLocalState { try? await Task.sleep(for: .milliseconds(20)) }
-            assert(reloaded.snapshot.creations.count == 2 && reloaded.snapshot.creations[0].tracking?.samples.count == 2)
-            assert(reloaded.creations(for: productID).count == 2)
-            let file = FileManager.default.temporaryDirectory.appending(path: "sku-check.csv")
-            try Data("SKU,商品名称,卖点\nIMPORT-1,杯子,有刻度\nIMPORT-2,水壶,带提手".utf8).write(to: file)
-            await reloaded.importSKUFile(file)
-            assert(reloaded.snapshot.products.count == 3)
-            await reloaded.importSKUFile(file)
-            assert(reloaded.snapshot.products.count == 3) // no partial or duplicate import
-            print("WORKFLOW CHECKS PASSED: no-key draft, image import, V1/V2 preservation, direct copy, tracking and reload")
-        } catch { assertionFailure(error.localizedDescription) }
+        await app.addPhoto(data: overflowPhoto, suggestedExtension: "png")
+        assert(app.sourceAssets.count == 9)
+        app.removeSource(app.sourceAssets.last!)
+        await app.addPhoto(data: overflowPhoto, suggestedExtension: "png")
+        assert(app.sourceAssets.count == 9)
+        app.moveSource(app.sourceAssets.last!, by: -1)
+        let photoIDs = app.sourceAssets.map(\.id)
+        await app.addPhotos(from: [])
+        await app.addPhotoFiles([])
+        await app.startNewProduct(from: [])
+        assert(app.sourceAssets.map(\.id) == photoIDs)
+        let savedAgain = await app.saveProductDraft()
+        assert(savedAgain && app.snapshot.products.count == 1 && app.sku == product.sku)
+        assert(app.snapshot.creations.isEmpty && app.snapshot.jobs.isEmpty)
+        let reloaded = AppModel()
+        while reloaded.isLoadingLocalState { try? await Task.sleep(for: .milliseconds(20)) }
+        let storedProduct = reloaded.snapshot.products.first { $0.id == product.id }!
+        await reloaded.resume(product: storedProduct)
+        assert(reloaded.screen == .sku && reloaded.operation == .idle)
+        assert(reloaded.sourceAssets.map(\.id) == photoIDs && reloaded.sku == product.sku)
+        await reloaded.delete(product: storedProduct)
+        assert(reloaded.snapshot.products.isEmpty && reloaded.snapshot.productSnapshots.isEmpty)
+        print("WORKFLOW CHECKS PASSED: SKU create, nine photos, edit, JSON reload and delete")
         exit(0)
     }
 }

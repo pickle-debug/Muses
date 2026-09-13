@@ -18,7 +18,7 @@ struct SetupView: View {
                 }
                 .padding(.top, 34)
 
-                InfoBanner(text: "商品录入、版本查看和销售跟进无需 API Key。连接 AI 服务后，即可生成商品图文。", kind: .neutral)
+                InfoBanner(text: "商品创建和查看无需 API Key。", kind: .neutral)
 
                 SurfaceCard {
                     VStack(alignment: .leading, spacing: 20) {
@@ -77,15 +77,10 @@ struct SetupView: View {
                         .disabled(app.connectionState == .testing || (!app.hasStoredCredential && app.apiKey.trimmed.isEmpty) || app.isPlaceholderConfiguration)
 
                         if app.isPlaceholderConfiguration {
-                            InfoBanner(text: "真实供应商配置尚未填写。可先进入预览模式体验完整 UI 和审核流程；预览模式不会调用模型或保存示例媒体。", kind: .neutral)
-                            SecondaryButton(title: "进入安全预览模式", icon: "play.rectangle") { app.enterPreviewMode() }
+                            InfoBanner(text: "服务配置尚未填写，不影响商品创建和查看。", kind: .neutral)
                         }
 
-                        PrimaryButton(
-                            title: app.connectionState == .preview ? "进入预览" : "完成设置",
-                            icon: "arrow.right",
-                            disabled: app.connectionState != .connected && app.connectionState != .preview
-                        ) { app.saveSetupAndContinue() }
+                        PrimaryButton(title: "完成设置", icon: "checkmark") { app.selectTab(.products) }
                     }
                 }
 
@@ -102,7 +97,7 @@ struct SetupView: View {
         .confirmationDialog("删除本地 Key？", isPresented: $showDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { app.deleteCredential() }
         } message: {
-            Text("删除后需要重新输入临时 Key 才能继续真实创作，现有本地项目不会删除。")
+            Text("删除后需要重新输入 Key 才能连接服务，现有本地商品不会删除。")
         }
     }
 
@@ -114,8 +109,8 @@ struct SetupView: View {
         switch app.connectionState {
         case .idle: EmptyView()
         case .testing: HStack { ProgressView(); Text("正在测试低成本连接…") }.foregroundStyle(MusesTheme.secondaryInk)
-        case .connected: InfoBanner(text: "连接成功，可以开始创建商品内容。")
-        case .preview: InfoBanner(text: "预览模式已开启：只模拟状态转换，不发起真实生成。", kind: .warning)
+        case .connected: InfoBanner(text: "服务连接成功。")
+        case .preview: EmptyView()
         case .failed(let message): InfoBanner(text: message, kind: .warning)
         }
     }
