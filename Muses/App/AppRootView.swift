@@ -12,7 +12,9 @@ struct AppRootView: View {
 
     var body: some View {
         Group {
-            if #available(iOS 26.0, *) {
+            if app.screen == .sku {
+                SKUCreateView()
+            } else if #available(iOS 26.0, *) {
                 MTabs()
                     .ignoresSafeArea()
             } else {
@@ -102,9 +104,8 @@ struct WorkspaceScreenView: View {
             if app.selectedTab == tab {
                 switch app.screen {
                 case .setup: SetupView()
-                case .history: tabRoot
+                case .history, .sku: tabRoot
                 case .skuDetail(let id): SKUDetailView(productID: id)
-                case .sku: SKUCreateView()
                 }
             } else {
                 tabRoot

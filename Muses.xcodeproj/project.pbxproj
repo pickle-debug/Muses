@@ -10,8 +10,23 @@
 		779162083056C7000004BBCD /* CombineMoya in Frameworks */ = {isa = PBXBuildFile; productRef = 779162073056C7000004BBCD /* CombineMoya */; };
 		7791620A3056C7000004BBCD /* Moya in Frameworks */ = {isa = PBXBuildFile; productRef = 779162093056C7000004BBCD /* Moya */; };
 		77E0DA193056E0B30045EAFB /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 77E0DA183056E0B30045EAFB /* RealmSwift */; };
+		B20000000000000000000004 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 77E0DA183056E0B30045EAFB /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B20000000000000000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = B20000000000000000000003 /* Alamofire */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B20000000000000000000005 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				B20000000000000000000004 /* RealmSwift in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000001 /* Muses.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Muses.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -26,11 +41,34 @@
 			);
 			target = A10000000000000000000006 /* Muses */;
 		};
+		DCDB442630579ADA00B7C749 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"电商AI创业方向Grilling/01-阶段性决策记录.md",
+				"电商AI创业方向Grilling/02-续谈上下文.md",
+				"电商AI创业方向Grilling/03-首个内容实验草案.md",
+				"电商AI创业方向Grilling/04-三类素材与销售跟进功能逻辑.md",
+				"电商AI创业方向Grilling/05-首轮开发任务与试用计划.md",
+				"种草电商内容增长产品/01-产品分析.md",
+				"种草电商内容增长产品/02-功能PRD.md",
+				"种草电商内容增长产品/03-详细需求规格.md",
+				"种草电商内容增长产品/04-可行性与市场前景.md",
+				"Muses-技术架构与API契约.md",
+				"Muses-快速发布业务盘点与验收.md",
+				"Muses-首版规格与验收.md",
+				"Muses-四周路线图与内测方案.md",
+				"Muses-原生TabBar拖动验收.md",
+				"Muses-MVP产品文档.md",
+				"Muses-Realm数据结构.md",
+				"Muses-SKU录入页设计与验收.md",
+			);
+			target = A10000000000000000000006 /* Muses */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000002 /* Muses */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A10000000000000000000010 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Muses; sourceTree = "<group>"; };
-		A10000000000000000000012 /* docs */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = docs; sourceTree = "<group>"; };
+		DCDB442530579AD900B7C749 /* docs */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (DCDB442630579ADA00B7C749 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = docs; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,8 +90,8 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000002 /* Muses */,
-				A10000000000000000000012 /* docs */,
 				A10000000000000000000011 /* README.md */,
+				DCDB442530579AD900B7C749 /* docs */,
 				A10000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -76,6 +114,7 @@
 				A10000000000000000000008 /* Sources */,
 				A10000000000000000000003 /* Frameworks */,
 				A10000000000000000000009 /* Resources */,
+				B20000000000000000000005 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -83,6 +122,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000002 /* Muses */,
+				DCDB442530579AD900B7C749 /* docs */,
 			);
 			name = Muses;
 			packageProductDependencies = (

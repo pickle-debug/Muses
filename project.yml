@@ -38,6 +38,8 @@ targets:
       - package: Alamofire
       - package: RealmSwift
         product: RealmSwift
+        embed: true
+        codeSign: true
     settings:
       base:
         TARGETED_DEVICE_FAMILY: 1

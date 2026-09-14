@@ -101,6 +101,10 @@ final class TabBarUITests: XCTestCase {
         app.buttons["新建"].tap()
         let firstSlot = app.buttons["sku.photo.add.1"]
         XCTAssertTrue(firstSlot.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["workspace.tab.publish"].exists, "添加商品页不应显示发布按钮")
+        for title in ["AI选品", "我的商品", "销售跟进", "个人设置"] {
+            XCTAssertFalse(app.buttons["workspace.tab.\(title)"].exists, "添加商品页不应显示 TabBar")
+        }
         XCTAssertEqual(firstSlot.frame.width, firstSlot.frame.height, accuracy: 1)
         for index in 2...9 {
             XCTAssertFalse(app.buttons["sku.photo.add.\(index)"].exists, "只显示一个添加框")
@@ -123,6 +127,7 @@ final class TabBarUITests: XCTestCase {
         field.typeText("Glass cup")
         app.buttons["sku.input.done"].tap()
         XCTAssertTrue(app.buttons["sku.save"].isEnabled, "只填商品名称即可保存")
+        XCTAssertFalse(app.buttons["workspace.tab.publish"].exists, "收起键盘后仍应保持全屏")
         XCTAssertFalse(app.buttons["sku.recognize"].exists)
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "SKU entry — photo row and name"
@@ -134,7 +139,11 @@ final class TabBarUITests: XCTestCase {
         XCTAssertEqual(savedName.label, "Glass cup")
         app.buttons["sku.detail.edit"].tap()
         XCTAssertTrue(field.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["workspace.tab.publish"].exists, "编辑商品也应保持全屏")
         XCTAssertEqual(field.value as? String, "Glass cup")
         app.buttons["sku.back"].tap()
+        XCTAssertTrue(products.waitForExistence(timeout: 3))
+        XCTAssertTrue(products.isSelected)
+        XCTAssertTrue(app.buttons["workspace.tab.publish"].isHittable, "返回商品列表后恢复 TabBar")
     }
 }
